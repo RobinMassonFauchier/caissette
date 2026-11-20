@@ -1,0 +1,39 @@
+{
+  "name": "tickets-de-caisse",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:parser": "tsx scripts/test-parser.ts",
+    "test:pdf": "tsx scripts/test-pdf.ts",
+    "test:ocr": "tsx scripts/test-ocr.ts"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "googleapis": "^190.0.0",
+    "iron-session": "^9.1.0",
+    "lucide-react": "^0.545.0",
+    "next": "15.5.29",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sharp": "^0.35.5",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1",
+    "tesseract.js": "^7.0.0",
+    "unpdf": "^2.2.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

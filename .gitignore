@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Secrets — ne jamais versionner
+.env
+.env.local
+.env*.local
+credentials.json
+client_secret*.json
+
+# OCR / cache
+.cache/
+*.traineddata
+
+# Divers
+.DS_Store
+*.log
+npm-debug.log*
