@@ -1,5 +1,6 @@
 import { google, type drive_v3, type sheets_v4 } from "googleapis";
 import type { OAuth2Client } from "google-auth-library";
+import { Readable } from "node:stream";
 import type { Category, Expense } from "./types";
 import { isCategory } from "./catalog";
 
@@ -466,7 +467,7 @@ export async function uploadReceipt(
     },
     media: {
       mimeType: file.mimeType,
-      body: file.buffer,
+      body: Readable.from(file.buffer),
     },
     fields: "id, webViewLink",
   });

@@ -37,6 +37,8 @@ APP_URL=http://localhost:3000
 ALLOWED_EMAILS=
 ```
 
+> Si le port 3000 est déjà utilisé sur votre machine, mettez `APP_URL=http://localhost:3001` et lancez `npm run dev` ou `npm start -- -p 3001`. Déclarez alors aussi `http://localhost:3001/api/auth/callback` dans Google Console. C'est la configuration actuelle de ce poste.
+
 Générez la clé de session avec :
 
 ```bash
@@ -51,7 +53,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ### 3.1 Créer le projet et activer les API
 
-1. Ouvrez [Google Cloud Console](https://console.cloud.google.com/) et créez un projet (par exemple `caissette`.
+1. Ouvrez [Google Cloud Console](https://console.cloud.google.com/) et créez un projet (par exemple `caissette`).
 2. Menu **API et services → Bibliothèque**.
 3. Activez **Google Sheets API**.
 4. Activez **Google Drive API**.
@@ -67,7 +69,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    - `https://www.googleapis.com/auth/spreadsheets`
    - `https://www.googleapis.com/auth/drive.file`
 4. Ajoutez les comptes Google de la famille dans **Utilisateurs tests**.
-5. **Important :** cliquez sur **Publier l'application** (« En production »). En mode « Test », Google limite la durée de vie des autorisations à **7 jours**, ce qui obligerait à se reconnecter chaque semaine. En production, un avertissement « application non vérifiée » peut s'afficher : cliquez sur **Paramètres avancés → Accéder à l'application**. La vérification Google n'est pas nécessaire pour un usage familial.
+5. **Publication :** le mode « Test » fonctionne immédiatement (100 utilisateurs max), mais Google limite alors la durée de vie des autorisations à **7 jours** : il faut se reconnecter chaque semaine. Pour éviter cela, cliquez sur **Publier l'application**. Google exige pour cela une **page d'accueil** et une **politique de confidentialité publiques en HTTPS**, ainsi qu'un domaine autorisé dans **Branding**. La page `/confidentialite` de l'application est prête à être publiée ; dès que Caissette dispose d'une URL publique (Tailscale Funnel, Cloudflare Tunnel, nom de domaine…), renseignez ces deux URL dans **Branding**, ajoutez le domaine, puis publiez. Un avertissement « application non vérifiée » peut s'afficher pour les utilisateurs : **Paramètres avancés → Accéder à l'application**. La vérification Google n'est pas nécessaire pour un usage familial.
 
 ### 3.3 Créer les identifiants OAuth
 
@@ -90,6 +92,8 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 - le dossier **« Tickets de caisse — Caissette »** qui archive les originaux.
 
 Les deux sont accessibles depuis votre Google Drive.
+
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback` et `http://localhost:3001/api/auth/callback`. L'application tourne sur le port **3001** (le port 3000 est occupé par un autre projet) et le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule).
 
 ---
 

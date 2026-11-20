@@ -235,7 +235,12 @@ export function Landing({
       <footer className="border-t border-stone-200/70 py-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 text-xs text-stone-400 sm:flex-row sm:px-8">
           <p>Caissette · votre budget familial, sans prise de tête.</p>
-          <p>Un outil privé, hébergé chez vous.</p>
+          <div className="flex items-center gap-4">
+            <a href="/confidentialite" className="transition hover:text-stone-600">
+              Confidentialité
+            </a>
+            <p>Un outil privé, hébergé chez vous.</p>
+          </div>
         </div>
       </footer>
     </div>
