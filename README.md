@@ -81,6 +81,24 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    - et, si vous utilisez un accès distant, l'URL HTTPS correspondante (voir section 6).
 4. Copiez le **Client ID** et le **Client Secret** dans `.env.local`.
 
+### 3.4 Activer l'import Google Drive (facultatif)
+
+L'import Drive permet de choisir un PDF ou une photo déjà présent dans le Drive, sans le retélécharger. Il utilise **Google Picker** et une clé API navigateur.
+
+1. Dans **API et services → Bibliothèque**, activez **Google Picker API**.
+2. Dans **Identifiants → Créer des identifiants → Clé API**, créez une clé.
+3. Restreignez-la :
+   - **Restrictions d'API** : Google Drive API et Google Picker API ;
+   - **Restrictions relatives aux applications → Sites Web** : votre URL Render, `http://localhost:3000/*`, `http://localhost:3001/*` et `https://docs.google.com/*`.
+4. Ajoutez dans `.env.local` et dans Render :
+   ```env
+   GOOGLE_PICKER_API_KEY=AIza...
+   GOOGLE_PROJECT_NUMBER=93860449537
+   ```
+   (`GOOGLE_PROJECT_NUMBER` est le numéro du projet, visible dans **IAM et administration → Paramètres**.)
+
+Sans cette clé, le bouton « Importer depuis Google Drive » affiche une erreur de configuration ; le reste de l'application fonctionne normalement.
+
 Lancez ensuite :
 
 ```bash
@@ -110,7 +128,10 @@ Vous pouvez aussi :
 - **Ajouter** une dépense manuellement (`Ajouter`) ;
 - **Modifier** une ligne (clic sur la ligne, crayon) ;
 - **Supprimer** une ligne (corbeille) ;
+- **Importer un ticket depuis Google Drive** avec le bouton dédié (PDF ou photo déjà présent dans le Drive) ;
 - **Filtrer** par mois, par catégorie ou par recherche ;
+- **Consulter les statistiques** : évolution mensuelle, répartition par catégorie, moyens de paiement, jours de la semaine, top magasins, comparaison avec le mois précédent et budget ;
+- **Régler vos paramètres** : budget mensuel, catégorie par défaut, import Drive, compte Google ;
 - **Ouvrir le Sheet** à tout moment depuis l'en-tête.
 
 ### Colonnes de la feuille

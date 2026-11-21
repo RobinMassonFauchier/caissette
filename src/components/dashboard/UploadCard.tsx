@@ -10,8 +10,10 @@ const MAX_SIZE = 15 * 1024 * 1024;
 
 export function UploadCard({
   onExtracted,
+  children,
 }: {
   onExtracted: (receipt: ExtractedReceipt) => void;
+  children?: React.ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -167,6 +169,10 @@ export function UploadCard({
           <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
             {error}
           </p>
+        )}
+
+        {children && (
+          <div className="mt-4 border-t border-stone-100 pt-4">{children}</div>
         )}
       </div>
     </section>

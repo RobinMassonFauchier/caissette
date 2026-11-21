@@ -1,0 +1,181 @@
+"use client";
+
+import { useState } from "react";
+import { FolderOpen, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import type { ExtractedReceipt } from "@/lib/types";
+
+declare global {
+  interface Window {
+    gapi?: any;
+    google?: any;
+  }
+}
+
+let pickerLoader: Promise<void> | null = null;
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Impossible de charger l'API Google Picker."));
+    document.head.appendChild(script);
+  });
+}
+
+function loadPicker(): Promise<void> {
+  if (window.google?.picker) return Promise.resolve();
+  if (pickerLoader) return pickerLoader;
+
+  pickerLoader = loadScript("https://apis.google.com/js/api.js")
+    .then(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          if (!window.gapi) {
+            reject(new Error("API Google indisponible."));
+            return;
+          }
+          window.gapi.load("picker", {
+            callback: () => resolve(),
+            onerror: () =>
+              reject(new Error("Impossible d'initialiser Google Picker.")),
+          });
+        }),
+    )
+    .catch((error) => {
+      pickerLoader = null;
+      throw error;
+    });
+
+  return pickerLoader;
+}
+
+export function DriveImportButton({
+  onExtracted,
+}: {
+  onExtracted: (receipt: ExtractedReceipt) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function importFile(fileId: string) {
+    const response = await fetch("/api/drive/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileId }),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Impossible de lire ce fichier Drive.");
+    }
+
+    onExtracted(data as ExtractedReceipt);
+    toast.success("Ticket lu depuis Drive", {
+      description: "Vérifiez les informations avant d'enregistrer.",
+    });
+  }
+
+  async function openPicker() {
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      const [tokenResponse, configResponse] = await Promise.all([
+        fetch("/api/google-token"),
+        fetch("/api/drive/config"),
+      ]);
+
+      if (!tokenResponse.ok) {
+        throw new Error("Votre session Google a expiré. Reconnectez-vous.");
+      }
+      if (!configResponse.ok) {
+        throw new Error("Configuration Drive indisponible.");
+      }
+
+      const { accessToken } = await tokenResponse.json();
+      const { apiKey, appId } = await configResponse.json();
+
+      if (!apiKey) {
+        throw new Error(
+          "L'import Drive n'est pas configuré (clé API Google Picker manquante).",
+        );
+      }
+
+      await loadPicker();
+
+      const picker = new window.google.picker.PickerBuilder()
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(apiKey)
+        .setAppId(appId)
+        .addView(
+          new window.google.picker.DocsView(
+            window.google.picker.ViewId.DOCS,
+          )
+            .setMimeTypes("application/pdf,image/jpeg,image/png,image/webp")
+            .setIncludeFolders(false),
+        )
+        .setTitle("Choisir un ticket dans Google Drive")
+        .setCallback((data: any) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const fileId = data.docs?.[0]?.id;
+            if (!fileId) {
+              setBusy(false);
+              return;
+            }
+            void importFile(fileId)
+              .catch((error) => {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "Impossible de lire ce fichier Drive.",
+                );
+              })
+              .finally(() => setBusy(false));
+            return;
+          }
+
+          if (data.action === window.google.picker.Action.CANCEL) {
+            setBusy(false);
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    } catch (error) {
+      setBusy(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'ouvrir Google Drive.",
+      );
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={busy}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-[12.5px] font-medium text-stone-700 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 disabled:opacity-60"
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin text-emerald-600" />
+        ) : (
+          <FolderOpen className="size-4 text-emerald-600" />
+        )}
+        {busy ? "Lecture du fichier…" : "Importer depuis Google Drive"}
+      </button>
+      <p className="mt-1.5 text-center text-[10px] text-stone-400">
+        PDF ou photo déjà présent dans votre Drive, un ticket à la fois.
+      </p>
+    </div>
+  );
+}

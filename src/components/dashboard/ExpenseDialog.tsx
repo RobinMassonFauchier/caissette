@@ -8,8 +8,8 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { CategorySelect } from "@/components/ui/CategorySelect";
 import {
-  CATEGORIES,
   PAYMENT_METHODS,
 } from "@/lib/catalog";
 import { parseAmountInput, todayISO } from "@/lib/format";
@@ -226,17 +226,14 @@ export function ExpenseDialog({
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
               Catégorie
             </span>
-            <select
+            <CategorySelect
               value={category}
-              onChange={(event) => setCategory(event.target.value as Category)}
-              className={inputClass}
-            >
-              {CATEGORIES.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => {
+                if (value !== "all") setCategory(value);
+              }}
+              ariaLabel="Catégorie de la dépense"
+              className="!py-2"
+            />
           </label>
 
           <label className="block">

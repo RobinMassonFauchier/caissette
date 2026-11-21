@@ -9,9 +9,10 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { CATEGORIES, CATEGORY_STYLES } from "@/lib/catalog";
+import { CATEGORY_STYLES } from "@/lib/catalog";
 import { formatDateShort, formatEuro } from "@/lib/format";
 import type { Category, Expense } from "@/lib/types";
+import { CategorySelect } from "@/components/ui/CategorySelect";
 import { cn } from "@/lib/utils";
 
 export function ExpenseTable({
@@ -75,19 +76,14 @@ export function ExpenseTable({
             />
           </div>
 
-          <select
+          <CategorySelect
             value={category}
-            onChange={(event) => setCategory(event.target.value as Category | "all")}
-            className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-stone-50/60 px-2.5 py-1.5 text-[13px] text-stone-700 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15 sm:flex-none"
-            aria-label="Filtrer par catégorie"
-          >
-            <option value="all">Toutes les catégories</option>
-            {CATEGORIES.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            onChange={setCategory}
+            includeAll
+            variant="filter"
+            ariaLabel="Filtrer par catégorie"
+            className="min-w-0 flex-1 sm:w-[190px] sm:flex-none"
+          />
 
           <button
             type="button"

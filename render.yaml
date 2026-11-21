@@ -21,3 +21,7 @@ services:
         value: https://caissette-robin.onrender.com
       - key: ALLOWED_EMAILS
         sync: false
+      - key: GOOGLE_PICKER_API_KEY
+        sync: false
+      - key: GOOGLE_PROJECT_NUMBER
+        value: "93860449537"

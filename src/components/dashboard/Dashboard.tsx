@@ -4,18 +4,17 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calculator,
-  ExternalLink,
-  LogOut,
   ReceiptText,
   RefreshCw,
   ShieldCheck,
   Sparkles,
   Tag,
+  Target,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Logo } from "@/components/Logo";
+import { AppHeader } from "@/components/app/AppHeader";
 import { CategoryBreakdown } from "@/components/dashboard/CategoryBreakdown";
 import {
   ExpenseDialog,
@@ -24,24 +23,30 @@ import {
 import { ExpenseTable } from "@/components/dashboard/ExpenseTable";
 import { MonthSwitcher } from "@/components/dashboard/MonthSwitcher";
 import { UploadCard } from "@/components/dashboard/UploadCard";
+import { DriveImportButton } from "@/components/dashboard/DriveImportButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { currentMonth, formatEuro, monthLabel, todayISO } from "@/lib/format";
+import type { AppSettings } from "@/lib/settings";
 import type {
   Expense,
   ExpensePayload,
   ExtractedReceipt,
   SessionUser,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 export default function Dashboard({
   user,
   expenses,
   sheetUrl,
+  settings,
   error,
 }: {
   user: SessionUser;
   expenses: Expense[];
   sheetUrl: string;
+  settings: AppSettings;
   error: string | null;
 }) {
   const router = useRouter();
@@ -72,12 +77,6 @@ export default function Dashboard({
   }, [monthExpenses]);
 
   const firstName = user.name?.split(" ")[0] || "vous";
-  const initials = (user.name || user.email || "?")
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 
   function handleExtracted(receipt: ExtractedReceipt) {
     setCreating({
@@ -162,57 +161,7 @@ export default function Dashboard({
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-stone-50/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Logo />
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            {sheetUrl && (
-              <a
-                href={sheetUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-700 shadow-sm transition hover:border-stone-300 hover:text-stone-900 sm:px-3"
-              >
-                <span className="hidden sm:inline">Ouvrir le Sheet</span>
-                <span className="sm:hidden">Sheet</span>
-                <ExternalLink className="size-3.5 text-stone-400" />
-              </a>
-            )}
-
-            <div className="hidden items-center gap-2 border-l border-stone-200 pl-3 md:flex">
-              {user.picture ? (
-                <img
-                  src={user.picture}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-8 rounded-full object-cover ring-2 ring-white"
-                />
-              ) : (
-                <span className="grid size-8 place-items-center rounded-full bg-emerald-100 text-[11px] font-semibold text-emerald-700">
-                  {initials}
-                </span>
-              )}
-              <div className="max-w-[140px]">
-                <p className="truncate text-[12px] font-medium leading-tight text-stone-800">
-                  {user.name}
-                </p>
-                <p className="truncate text-[10px] leading-tight text-stone-400">
-                  {user.email}
-                </p>
-              </div>
-            </div>
-
-            <a
-              href="/api/auth/logout"
-              title="Se déconnecter"
-              className="grid size-8 place-items-center rounded-lg text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-700"
-            >
-              <LogOut className="size-4" />
-            </a>
-          </div>
-        </div>
-      </header>
+      <AppHeader user={user} sheetUrl={sheetUrl} active="expenses" />
 
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:py-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -285,13 +234,17 @@ export default function Dashboard({
 
             <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_350px]">
               <div className="space-y-6">
-                <UploadCard onExtracted={handleExtracted} />
+                <UploadCard onExtracted={handleExtracted}>
+                  {settings.driveImportEnabled && (
+                    <DriveImportButton onExtracted={handleExtracted} />
+                  )}
+                </UploadCard>
                 <ExpenseTable
                   expenses={monthExpenses}
                   onAdd={() =>
                     setCreating({
                       date: todayISO(),
-                      category: "Alimentation",
+                      category: settings.defaultCategory,
                       payment: "Carte bancaire",
                     })
                   }
@@ -301,6 +254,13 @@ export default function Dashboard({
               </div>
 
               <aside className="space-y-6 lg:sticky lg:top-24">
+                {month !== "all" && (
+                  <BudgetCard
+                    budget={settings.monthlyBudget}
+                    spent={total}
+                    label={monthLabel(month)}
+                  />
+                )}
                 <CategoryBreakdown expenses={monthExpenses} />
 
                 <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-white to-stone-50 p-4 shadow-sm sm:p-5">
@@ -378,6 +338,95 @@ export default function Dashboard({
         />
       )}
     </div>
+  );
+}
+
+function BudgetCard({
+  budget,
+  spent,
+  label,
+}: {
+  budget: number | null;
+  spent: number;
+  label: string;
+}) {
+  if (!budget) {
+    return (
+      <section className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+            <Target className="size-3.5" />
+          </span>
+          <h2 className="text-sm font-semibold text-stone-900">Budget mensuel</h2>
+        </div>
+        <p className="mt-2 text-[12px] leading-relaxed text-stone-500">
+          Fixez un budget pour voir immédiatement s'il vous reste de la marge.
+        </p>
+        <Link
+          href="/app/settings"
+          className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+        >
+          Définir un budget
+        </Link>
+      </section>
+    );
+  }
+
+  const percent = budget > 0 ? (spent / budget) * 100 : 0;
+  const remaining = budget - spent;
+
+  return (
+    <section className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+            <Target className="size-3.5" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-stone-900">Budget</h2>
+            <p className="text-[10px] capitalize text-stone-400">{label}</p>
+          </div>
+        </div>
+        <Link
+          href="/app/settings"
+          className="text-[11px] text-stone-400 transition hover:text-stone-600 hover:underline"
+        >
+          Modifier
+        </Link>
+      </div>
+
+      <div className="mt-3 flex items-baseline justify-between gap-2">
+        <p className="text-lg font-semibold tabular-nums text-stone-900">
+          {formatEuro(spent)}
+        </p>
+        <p className="text-[11px] text-stone-400">sur {formatEuro(budget)}</p>
+      </div>
+
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+        <div
+          className={cn(
+            "h-full rounded-full transition",
+            percent >= 100
+              ? "bg-rose-500"
+              : percent >= 80
+                ? "bg-amber-500"
+                : "bg-emerald-500",
+          )}
+          style={{ width: `${Math.min(100, Math.max(2, percent))}%` }}
+        />
+      </div>
+
+      <p
+        className={cn(
+          "mt-2 text-[11px]",
+          remaining >= 0 ? "text-stone-500" : "text-rose-600",
+        )}
+      >
+        {remaining >= 0
+          ? `Reste ${formatEuro(remaining)}`
+          : `Dépassement de ${formatEuro(Math.abs(remaining))}`}
+      </p>
+    </section>
   );
 }
 
