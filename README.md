@@ -94,7 +94,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 
 Les deux sont accessibles depuis votre Google Drive.
 
-> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Elle n'utilise que le scope **non sensible** `drive.file` : **aucun avertissement Google « application non validée »** n'apparaît, et les autorisations ne sont pas limitées à 7 jours. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **dans les variables d'environnement Render**, puis redéployez. L'ajout aux « Utilisateurs tests » n'est plus nécessaire avec le scope non sensible `drive.file` (il reste possible, sans effet).
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette.onrender.com](https://caissette.onrender.com)** (Render, plan gratuit). Elle n'utilise que le scope **non sensible** `drive.file` : **aucun avertissement Google « application non validée »** n'apparaît, et les autorisations ne sont pas limitées à 7 jours. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **dans les variables d'environnement Render**, puis redéployez. L'ajout aux « Utilisateurs tests » n'est plus nécessaire avec le scope non sensible `drive.file` (il reste possible, sans effet).
 
 ---
 
@@ -154,7 +154,7 @@ Le PC doit rester allumé pour un accès permanent.
 
 ### 6.1 Déploiement Render actuel (gratuit, sans PC allumé)
 
-L'application est déjà en ligne sur **https://caissette-robin.onrender.com**.
+L'application est déjà en ligne sur **https://caissette.onrender.com**.
 
 - Dépôt du code : [github.com/RobinMassonFauchier/caissette](https://github.com/RobinMassonFauchier/caissette)
 - Plan Render **Free** : 512 Mo de RAM, 0,1 CPU, mise en veille après 15 minutes d'inactivité. Un workflow GitHub Actions (`.github/workflows/keep-alive.yml`) ping la page toutes les 10 minutes pour la garder éveillée.

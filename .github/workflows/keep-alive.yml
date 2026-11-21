@@ -14,4 +14,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Réveiller le service Render
-        run: curl -fsS --max-time 90 https://caissette-robin.onrender.com/confidentialite > /dev/null
+        run: curl -fsS --max-time 90 https://caissette.onrender.com/confidentialite > /dev/null
