@@ -6,7 +6,8 @@ export const GOOGLE_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/spreadsheets",
+  // Non sensible : accès uniquement aux fichiers créés/ouverts par l'application.
+  // Ce scope suffit pour l'API Sheets sur nos propres feuilles.
   "https://www.googleapis.com/auth/drive.file",
 ];
 

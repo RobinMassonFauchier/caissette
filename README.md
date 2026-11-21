@@ -66,8 +66,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    - `openid`
    - `.../auth/userinfo.email`
    - `.../auth/userinfo.profile`
-   - `https://www.googleapis.com/auth/spreadsheets`
    - `https://www.googleapis.com/auth/drive.file`
+
+   > `drive.file` est un accès **non sensible** : il permet à l'application d'accéder uniquement aux fichiers qu'elle a créés (la feuille de calcul et les tickets). C'est ce qui évite l'avertissement Google « application non validée ».
 4. Ajoutez les comptes Google de la famille dans **Utilisateurs tests**.
 5. **Publication (recommandée) :** en mode « Test », Google limite la durée de vie des autorisations à **7 jours** : il faudrait se reconnecter chaque semaine. Pour cette installation, l'application est **déjà publiée en production** avec la page d'accueil et la politique de confidentialité servies par Render. Google affiche toutefois un avertissement « application non validée » à la connexion (les portées Google Sheets sont sensibles) : cliquez sur **Autoriser**. Faire vérifier l'application par Google supprimerait cet avertissement, mais ce n'est pas nécessaire pour un usage familial.
 
@@ -205,7 +206,7 @@ Dans tous les cas, `APP_URL` doit correspondre **exactement** à l'URI déclaré
 
 - La session est un cookie chiffré (iron-session), valable 30 jours, `httpOnly`.
 - Le refresh token Google est stocké **uniquement dans ce cookie chiffré** ; aucune base de données.
-- L'application ne demande que les portées `spreadsheets` et `drive.file` : elle ne voit que les fichiers **qu'elle a créés**.
+- L'application ne demande que la portée `drive.file` : elle ne voit que les fichiers **qu'elle a créés**.
 - Les justificatifs sont archivés dans le Drive de l'utilisateur, jamais sur le serveur.
 - `ALLOWED_EMAILS` permet de fermer l'accès aux seuls comptes autorisés.
 - Pour révoquer complètement l'accès : [myaccount.google.com/permissions](https://myaccount.google.com/permissions).

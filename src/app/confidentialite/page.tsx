@@ -109,16 +109,11 @@ export default function PrivacyPage() {
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>
                 <code className="rounded bg-stone-100 px-1 py-0.5 text-[12px]">
-                  spreadsheets
-                </code>{" "}
-                : lire et modifier vos feuilles de calcul Google Sheets.
-              </li>
-              <li>
-                <code className="rounded bg-stone-100 px-1 py-0.5 text-[12px]">
                   drive.file
                 </code>{" "}
                 : accéder uniquement aux fichiers créés ou ouverts par
-                l&apos;application.
+                l&apos;application (la feuille de calcul et les tickets
+                archivés).
               </li>
               <li>
                 <code className="rounded bg-stone-100 px-1 py-0.5 text-[12px]">
@@ -128,9 +123,10 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p className="mt-2">
-              L&apos;application ne peut pas accéder au reste de votre Drive, à vos
-              e-mails ni à vos contacts. Vous pouvez révoquer cet accès à tout
-              moment sur{" "}
+              L&apos;application ne demande donc <strong>aucun accès sensible</strong> à
+              l&apos;ensemble de vos feuilles de calcul. Elle ne peut pas accéder au
+              reste de votre Drive, à vos e-mails ni à vos contacts. Vous pouvez
+              révoquer cet accès à tout moment sur{" "}
               <a
                 href="https://myaccount.google.com/permissions"
                 target="_blank"
