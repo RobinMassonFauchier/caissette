@@ -69,7 +69,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    - `https://www.googleapis.com/auth/spreadsheets`
    - `https://www.googleapis.com/auth/drive.file`
 4. Ajoutez les comptes Google de la famille dans **Utilisateurs tests**.
-5. **Publication :** le mode « Test » fonctionne immédiatement (100 utilisateurs max), mais Google limite alors la durée de vie des autorisations à **7 jours** : il faut se reconnecter chaque semaine. Pour éviter cela, cliquez sur **Publier l'application**. Google exige pour cela une **page d'accueil** et une **politique de confidentialité publiques en HTTPS**, ainsi qu'un domaine autorisé dans **Branding**. La page `/confidentialite` de l'application est prête à être publiée ; dès que Caissette dispose d'une URL publique (Tailscale Funnel, Cloudflare Tunnel, nom de domaine…), renseignez ces deux URL dans **Branding**, ajoutez le domaine, puis publiez. Un avertissement « application non vérifiée » peut s'afficher pour les utilisateurs : **Paramètres avancés → Accéder à l'application**. La vérification Google n'est pas nécessaire pour un usage familial.
+5. **Publication (recommandée) :** en mode « Test », Google limite la durée de vie des autorisations à **7 jours** : il faudrait se reconnecter chaque semaine. Pour cette installation, l'application est **déjà publiée en production** avec la page d'accueil et la politique de confidentialité servies par Render. Google affiche toutefois un avertissement « application non validée » à la connexion (les portées Google Sheets sont sensibles) : cliquez sur **Autoriser**. Faire vérifier l'application par Google supprimerait cet avertissement, mais ce n'est pas nécessaire pour un usage familial.
 
 ### 3.3 Créer les identifiants OAuth
 
@@ -93,7 +93,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 
 Les deux sont accessibles depuis votre Google Drive.
 
-> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render. En local, l'application peut aussi tourner sur le port 3001 (3000 est utilisé par un autre projet).
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit) et l'écran de consentement OAuth est **publié en production** : les autorisations Google ne sont donc plus limitées à 7 jours. Google affiche un avertissement « application non validée » (portées Sheets sensibles) : cliquez sur **Autoriser**. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render. En local, l'application peut aussi tourner sur le port 3001 (3000 est utilisé par un autre projet).
 
 ---
 
@@ -161,6 +161,7 @@ L'application est déjà en ligne sur **https://caissette-robin.onrender.com**.
 - Mise à jour : `git push origin master` déclenche un nouveau déploiement.
 - L'OCR prend environ 20 à 60 secondes sur le plan gratuit (contre quelques secondes en local). C'est normal.
 - Le service se rendort si GitHub Actions est interrompu ; le premier accès prend alors environ une minute.
+- L'écran de consentement OAuth est publié en production : plus de reconnexion tous les 7 jours. Google affiche un avertissement « application non validée » (normal pour une application personnelle non vérifiée) ; cliquez sur **Autoriser**.
 
 ### 6.2 Accès privé avec Tailscale (optionnel)
 
