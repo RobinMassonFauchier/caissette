@@ -70,7 +70,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
    > `drive.file` est un accès **non sensible** : il permet à l'application d'accéder uniquement aux fichiers qu'elle a créés (la feuille de calcul et les tickets). C'est ce qui évite l'avertissement Google « application non validée ».
 4. Ajoutez les comptes Google de la famille dans **Utilisateurs tests**.
-5. **Publication (recommandée) :** en mode « Test », Google limite la durée de vie des autorisations à **7 jours** : il faudrait se reconnecter chaque semaine. Pour cette installation, l'application est **déjà publiée en production** avec la page d'accueil et la politique de confidentialité servies par Render. Google affiche toutefois un avertissement « application non validée » à la connexion (les portées Google Sheets sont sensibles) : cliquez sur **Autoriser**. Faire vérifier l'application par Google supprimerait cet avertissement, mais ce n'est pas nécessaire pour un usage familial.
+5. **Publication :** l'application actuelle est **déjà publiée en production** avec la page d'accueil et la politique de confidentialité servies par Render. Comme elle ne demande que des portées **non sensibles** (`drive.file` + identité), Google n'affiche **aucun avertissement de vérification**. Il n'y a donc rien d'autre à faire. Si vous ajoutiez un jour un scope sensible (`spreadsheets`, Gmail…), il faudrait republier et éventuellement faire vérifier l'application.
 
 ### 3.3 Créer les identifiants OAuth
 
@@ -94,7 +94,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 
 Les deux sont accessibles depuis votre Google Drive.
 
-> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit) et l'écran de consentement OAuth est **publié en production** : les autorisations Google ne sont donc plus limitées à 7 jours. Google affiche un avertissement « application non validée » (portées Sheets sensibles) : cliquez sur **Autoriser**. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render. En local, l'application peut aussi tourner sur le port 3001 (3000 est utilisé par un autre projet).
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Elle n'utilise que le scope **non sensible** `drive.file` : **aucun avertissement Google « application non validée »** n'apparaît, et les autorisations ne sont pas limitées à 7 jours. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render.
 
 ---
 
@@ -162,7 +162,7 @@ L'application est déjà en ligne sur **https://caissette-robin.onrender.com**.
 - Mise à jour : `git push origin master` déclenche un nouveau déploiement.
 - L'OCR prend environ 20 à 60 secondes sur le plan gratuit (contre quelques secondes en local). C'est normal.
 - Le service se rendort si GitHub Actions est interrompu ; le premier accès prend alors environ une minute.
-- L'écran de consentement OAuth est publié en production : plus de reconnexion tous les 7 jours. Google affiche un avertissement « application non validée » (normal pour une application personnelle non vérifiée) ; cliquez sur **Autoriser**.
+- L'écran de consentement ne demande que `drive.file` et l'identité : **aucun avertissement de vérification Google**, et plus de reconnexion tous les 7 jours.
 
 ### 6.2 Accès privé avec Tailscale (optionnel)
 
@@ -207,6 +207,7 @@ Dans tous les cas, `APP_URL` doit correspondre **exactement** à l'URI déclaré
 - La session est un cookie chiffré (iron-session), valable 30 jours, `httpOnly`.
 - Le refresh token Google est stocké **uniquement dans ce cookie chiffré** ; aucune base de données.
 - L'application ne demande que la portée `drive.file` : elle ne voit que les fichiers **qu'elle a créés**.
+- **Pourquoi aucun avertissement Google ?** Le scope `spreadsheets` (considéré comme sensible) n'est **pas** demandé. Caissette crée elle-même la feuille et y accède via `drive.file`, qui est non sensible et recommandé par Google pour ce cas. C'est ce qui supprime l'écran « application non validée ».
 - Les justificatifs sont archivés dans le Drive de l'utilisateur, jamais sur le serveur.
 - `ALLOWED_EMAILS` permet de fermer l'accès aux seuls comptes autorisés.
 - Pour révoquer complètement l'accès : [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
@@ -220,7 +221,8 @@ Dans tous les cas, `APP_URL` doit correspondre **exactement** à l'URI déclaré
 | -------- | -------- |
 | `redirect_uri_mismatch` | `APP_URL` et l'URI déclarée dans Google Console doivent être identiques (http/https, port, pas de slash final). Redémarrez après modification de `.env.local`. |
 | « Google a refusé l'accès » | Vérifiez que **Sheets API** et **Drive API** sont activées. Attendez quelques minutes après l'activation, puis reconnectez-vous. |
-| Reconnexion obligatoire chaque semaine | L'application OAuth est encore en mode « Test ». Publiez-la en production (section 3.2). |
+| Écran Google « application non validée » | Cet écran ne doit plus apparaître : l'application n'utilise que `drive.file`. Si vous l'avez encore, c'est que votre compte a accordé l'ancienne version avec le scope Sheets. Révoquez l'accès sur [myaccount.google.com/permissions](https://myaccount.google.com/permissions), puis reconnectez-vous. |
+| Le service Render met du temps à répondre | Le plan gratuit s'endort après 15 minutes ; le premier accès peut prendre une minute. Le workflow GitHub Actions le garde éveillé. |
 | « Ce PDF ne contient pas de texte exploitable » | PDF scanné : envoyez une photo du ticket ou saisissez-le manuellement. |
 | OCR vide / illisible | Photo à plat, ticket entier, bonne lumière, sans reflet. Le premier essai nécessite internet. |
 | Le port 3000 est occupé | `npm start -- -p 3001`, et adaptez `APP_URL` + l'URI Google. |
