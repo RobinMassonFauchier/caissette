@@ -94,7 +94,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 
 Les deux sont accessibles depuis votre Google Drive.
 
-> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Elle n'utilise que le scope **non sensible** `drive.file` : **aucun avertissement Google « application non validée »** n'apparaît, et les autorisations ne sont pas limitées à 7 jours. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render.
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Elle n'utilise que le scope **non sensible** `drive.file` : **aucun avertissement Google « application non validée »** n'apparaît, et les autorisations ne sont pas limitées à 7 jours. Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **dans les variables d'environnement Render**, puis redéployez. L'ajout aux « Utilisateurs tests » n'est plus nécessaire avec le scope non sensible `drive.file` (il reste possible, sans effet).
 
 ---
 
@@ -159,7 +159,7 @@ L'application est déjà en ligne sur **https://caissette-robin.onrender.com**.
 - Dépôt du code : [github.com/RobinMassonFauchier/caissette](https://github.com/RobinMassonFauchier/caissette)
 - Plan Render **Free** : 512 Mo de RAM, 0,1 CPU, mise en veille après 15 minutes d'inactivité. Un workflow GitHub Actions (`.github/workflows/keep-alive.yml`) ping la page toutes les 10 minutes pour la garder éveillée.
 - Les secrets (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ALLOWED_EMAILS`) sont configurés dans **Render → Environment**, jamais dans le dépôt.
-- Mise à jour : `git push origin master` déclenche un nouveau déploiement.
+- Mise à jour : `git push origin master`, puis dans Render **Manual Deploy → Deploy latest commit**. Le déploiement automatique n'est pas actif pour une source « Public Git Repository » ; il faut donc cette dernière étape.
 - L'OCR prend environ 20 à 60 secondes sur le plan gratuit (contre quelques secondes en local). C'est normal.
 - Le service se rendort si GitHub Actions est interrompu ; le premier accès prend alors environ une minute.
 - L'écran de consentement ne demande que `drive.file` et l'identité : **aucun avertissement de vérification Google**, et plus de reconnexion tous les 7 jours.
