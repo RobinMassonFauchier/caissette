@@ -1,0 +1,17 @@
+name: Garder Caissette éveillée
+
+on:
+  schedule:
+    # Toutes les 10 minutes : évite la mise en veille Render (15 min).
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Réveiller le service Render
+        run: curl -fsS --max-time 90 https://caissette-robin.onrender.com/confidentialite > /dev/null

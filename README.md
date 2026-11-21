@@ -93,7 +93,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Goo
 
 Les deux sont accessibles depuis votre Google Drive.
 
-> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback` et `http://localhost:3001/api/auth/callback`. L'application tourne sur le port **3001** (le port 3000 est occupé par un autre projet) et le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule).
+> **État de cette installation :** le client OAuth « Caissette Web » est créé avec les URI `http://localhost:3000/api/auth/callback`, `http://localhost:3001/api/auth/callback` et `https://caissette-robin.onrender.com/api/auth/callback`. L'application est **déployée en ligne sur [https://caissette-robin.onrender.com](https://caissette-robin.onrender.com)** (Render, plan gratuit). Le compte `robin.massonfauchier@gmail.com` est autorisé comme utilisateur test et dans `ALLOWED_EMAILS`. La feuille et le dossier ont été créés dans le Drive de ce compte. Pour ajouter un membre de la famille : **Google Auth Platform → Audience → Utilisateurs tests → Add users**, puis ajoutez son adresse e-mail dans `ALLOWED_EMAILS` (séparée par une virgule) **et** dans les variables d'environnement Render. En local, l'application peut aussi tourner sur le port 3001 (3000 est utilisé par un autre projet).
 
 ---
 
@@ -149,7 +149,22 @@ Le PC doit rester allumé pour un accès permanent.
 
 ---
 
-## 6. Accès depuis les téléphones (hors de chez vous)
+## 6. Accès en ligne et depuis les téléphones
+
+### 6.1 Déploiement Render actuel (gratuit, sans PC allumé)
+
+L'application est déjà en ligne sur **https://caissette-robin.onrender.com**.
+
+- Dépôt du code : [github.com/RobinMassonFauchier/caissette](https://github.com/RobinMassonFauchier/caissette)
+- Plan Render **Free** : 512 Mo de RAM, 0,1 CPU, mise en veille après 15 minutes d'inactivité. Un workflow GitHub Actions (`.github/workflows/keep-alive.yml`) ping la page toutes les 10 minutes pour la garder éveillée.
+- Les secrets (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ALLOWED_EMAILS`) sont configurés dans **Render → Environment**, jamais dans le dépôt.
+- Mise à jour : `git push origin master` déclenche un nouveau déploiement.
+- L'OCR prend environ 20 à 60 secondes sur le plan gratuit (contre quelques secondes en local). C'est normal.
+- Le service se rendort si GitHub Actions est interrompu ; le premier accès prend alors environ une minute.
+
+### 6.2 Accès privé avec Tailscale (optionnel)
+
+Tailscale reste utile si vous voulez un accès **strictement privé**, sans passer par Internet. Il faut alors que le PC soit allumé.
 
 Google n'accepte **pas** les URL de redirection en `http://` vers une adresse IP locale (`http://192.168.1.20:3000`). Trois solutions :
 
