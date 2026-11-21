@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs";
 import { createWorker, OEM, PSM, type Worker } from "tesseract.js";
 import sharp from "sharp";
@@ -13,7 +14,9 @@ let workerPromise: Promise<Worker> | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function getCachePath(): string {
-  const cachePath = path.join(process.cwd(), ".cache", "tesseract");
+  // /tmp sur les hébergements cloud, dossier temporaire Windows en local.
+  const cachePath =
+    process.env.OCR_CACHE_DIR || path.join(os.tmpdir(), "caissette-tesseract");
   fs.mkdirSync(cachePath, { recursive: true });
   return cachePath;
 }
