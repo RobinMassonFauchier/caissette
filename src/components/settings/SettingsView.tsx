@@ -78,11 +78,16 @@ export function SettingsView() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const savedBudget = settings.monthlyBudget
-    ? String(settings.monthlyBudget).replace(".", ",")
-    : "";
+  const parsedBudget = budget.trim() ? parseAmountInput(budget) : null;
+  const budgetChanged =
+    budget.trim() === ""
+      ? settings.monthlyBudget !== null
+      : parsedBudget === null
+        ? true
+        : parsedBudget !== settings.monthlyBudget;
+
   const dirty =
-    budget.trim() !== savedBudget.trim() ||
+    budgetChanged ||
     defaultCategory !== settings.defaultCategory ||
     driveImportEnabled !== settings.driveImportEnabled;
 
