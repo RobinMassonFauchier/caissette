@@ -34,7 +34,6 @@ import type {
   SessionUser,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 
 export default function Dashboard({
   user,
@@ -362,12 +361,12 @@ function BudgetCard({
         <p className="mt-2 text-[12px] leading-relaxed text-stone-500">
           Fixez un budget pour voir immédiatement s'il vous reste de la marge.
         </p>
-        <Link
+        <a
           href="/app/settings"
           className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
         >
           Définir un budget
-        </Link>
+        </a>
       </section>
     );
   }
@@ -387,12 +386,12 @@ function BudgetCard({
             <p className="text-[10px] capitalize text-stone-400">{label}</p>
           </div>
         </div>
-        <Link
+        <a
           href="/app/settings"
           className="text-[11px] text-stone-400 transition hover:text-stone-600 hover:underline"
         >
           Modifier
-        </Link>
+        </a>
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-2">
