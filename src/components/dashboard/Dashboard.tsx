@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Calculator,
   ReceiptText,
@@ -24,8 +25,14 @@ import { MonthSwitcher } from "@/components/dashboard/MonthSwitcher";
 import { UploadCard } from "@/components/dashboard/UploadCard";
 import { DriveImportButton } from "@/components/dashboard/DriveImportButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { BatchImportDialog } from "@/components/dashboard/BatchImportDialog";
 import { currentMonth, formatEuro, monthLabel, todayISO } from "@/lib/format";
-import type { Expense, ExpensePayload, ExtractedReceipt } from "@/lib/types";
+import type {
+  DriveImportResult,
+  Expense,
+  ExpensePayload,
+  ExtractedReceipt,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -35,6 +42,9 @@ export default function Dashboard() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [batchImport, setBatchImport] = useState<DriveImportResult[] | null>(
+    null,
+  );
 
   const monthExpenses = useMemo(
     () =>
@@ -226,7 +236,7 @@ export default function Dashboard() {
               <div className="space-y-6">
                 <UploadCard onExtracted={handleExtracted}>
                   {settings.driveImportEnabled && (
-                    <DriveImportButton onExtracted={handleExtracted} />
+                    <DriveImportButton onBatch={setBatchImport} />
                   )}
                 </UploadCard>
                 <ExpenseTable
@@ -327,6 +337,22 @@ export default function Dashboard() {
           onClose={() => setDeleting(null)}
         />
       )}
+
+      {batchImport && (
+        <BatchImportDialog
+          results={batchImport}
+          onClose={() => setBatchImport(null)}
+          onImported={async () => {
+            try {
+              await refresh();
+            } catch {
+              toast.error(
+                "Tickets importés, mais le tableau n'a pas pu se rafraîchir.",
+              );
+            }
+          }}
+        />
+      )}
     </>
   );
 }
@@ -352,12 +378,12 @@ function BudgetCard({
         <p className="mt-2 text-[12px] leading-relaxed text-stone-500">
           Fixez un budget pour voir immédiatement s'il vous reste de la marge.
         </p>
-        <a
+        <Link
           href="/app/settings"
           className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
         >
           Définir un budget
-        </a>
+        </Link>
       </section>
     );
   }
@@ -377,12 +403,12 @@ function BudgetCard({
             <p className="text-[10px] capitalize text-stone-400">{label}</p>
           </div>
         </div>
-        <a
+        <Link
           href="/app/settings"
           className="text-[11px] text-stone-400 transition hover:text-stone-600 hover:underline"
         >
           Modifier
-        </a>
+        </Link>
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-2">

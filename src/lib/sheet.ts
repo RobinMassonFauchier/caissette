@@ -420,6 +420,33 @@ export async function appendExpense(
   return { row: match ? Number(match[1]) : 0 };
 }
 
+export async function appendExpenses(
+  auth: OAuth2Client,
+  spreadsheetId: string,
+  inputs: ExpenseInput[],
+): Promise<{ rows: number[] }> {
+  if (inputs.length === 0) return { rows: [] };
+
+  const { sheets } = clients(auth);
+  const createdAt = new Date().toISOString();
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${TAB}!A:${LAST_COLUMN}`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: inputs.map((input) => [...toRowValues(input), createdAt]),
+    },
+  });
+
+  const updatedRange = response.data.updates?.updatedRange ?? "";
+  const match = /![A-Z]+(\d+):/.exec(updatedRange);
+  const start = match ? Number(match[1]) : 0;
+  return {
+    rows: inputs.map((_, index) => (start > 0 ? start + index : 0)),
+  };
+}
+
 export async function updateExpense(
   auth: OAuth2Client,
   spreadsheetId: string,

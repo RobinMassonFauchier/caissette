@@ -68,3 +68,7 @@ export interface ExtractedReceipt extends ParsedReceipt {
   fileName: string;
   source: "pdf" | "ocr";
 }
+
+export interface DriveImportResult extends ExtractedReceipt {
+  fileId?: string;
+}

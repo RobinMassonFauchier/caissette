@@ -128,7 +128,7 @@ Vous pouvez aussi :
 - **Ajouter** une dépense manuellement (`Ajouter`) ;
 - **Modifier** une ligne (clic sur la ligne, crayon) ;
 - **Supprimer** une ligne (corbeille) ;
-- **Importer un ticket depuis Google Drive** avec le bouton dédié (PDF ou photo déjà présent dans le Drive) ;
+- **Importer des tickets depuis Google Drive** avec le bouton dédié (PDF ou photos déjà présents dans le Drive, jusqu'à 5 à la fois) ; les données se rafraîchissent automatiquement après chaque modification et toutes les 2 minutes ;
 - **Filtrer** par mois, par catégorie ou par recherche ;
 - **Consulter les statistiques** : évolution mensuelle, répartition par catégorie, moyens de paiement, jours de la semaine, top magasins, comparaison avec le mois précédent et budget ;
 - **Régler vos paramètres** : budget mensuel, catégorie par défaut, import Drive, compte Google ;
@@ -285,10 +285,30 @@ src/
 
 ---
 
-## 10. Limites connues (v1)
+## 10. Limites et quotas
 
-- Une feuille par compte Google (pas de budget partagé entre plusieurs comptes).
-- Pas d'OCR sur les PDF scannés.
+### Comptes
+- Aucune limite technique dans le code : `ALLOWED_EMAILS` décide quels comptes Google peuvent utiliser l'application.
+- Chaque compte Google obtient **sa propre feuille** et son propre dossier Drive. Il n'y a pas de budget partagé entre comptes.
+- L'application OAuth utilise uniquement `drive.file` (non sensible) : pas de plafond Google lié aux portées sensibles.
+
+### Tickets
+- Pas de limite applicative au nombre de tickets.
+- Google Sheets limite un classeur à **10 millions de cellules**, soit environ **1,1 million de lignes** avec nos 9 colonnes.
+- Les photos sont limitées à **15 Mo par fichier** dans l'application.
+- Import Drive : **5 tickets maximum par sélection**.
+- Import groupé : **20 lignes maximum par requête**.
+- L'OCR est séquentiel (un worker Tesseract) : comptez 20 à 60 s par photo sur Render, donc quelques minutes pour 5 tickets.
+
+### Espace et hébergement
+- Google Drive gratuit : **15 Go partagés** entre Gmail, Drive et Photos. Les photos de tickets consomment cet espace ; surveillez-le.
+- Render gratuit : **512 Mo de RAM**, **0,1 CPU**, **750 heures d'instance par mois** et **5 Go de bande passante par mois**. Le workflow de maintien en éveil consomme environ 720 h/mois ; le service peut être suspendu si le quota mensuel est dépassé.
+- Après 15 minutes sans requête, Render endort le service ; le premier accès peut prendre une minute.
+
+### Fonctionnalités
+- Une feuille par compte Google (pas de budget partagé).
+- Pas d'OCR sur les PDF scannés : envoyer une photo.
 - La détection des tickets est heuristique : les tickets très abîmés ou les enseignes peu connues demandent une correction manuelle.
 - Pas d'import de relevés bancaires ni de récurrences automatiques.
-- L'application doit tourner sur une machine allumée (PC familial ou petit serveur).
+- Gmail n'est pas activé (autorisation Google restreinte). L'import Drive est l'alternative.
+- L'application tourne sur Render ; le PC familial peut rester éteint.

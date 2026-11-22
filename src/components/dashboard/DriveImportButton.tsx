@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ExtractedReceipt } from "@/lib/types";
+import type { DriveImportResult } from "@/lib/types";
 
 declare global {
   interface Window {
@@ -11,6 +11,8 @@ declare global {
     google?: any;
   }
 }
+
+const MAX_FILES = 5;
 
 let pickerLoader: Promise<void> | null = null;
 
@@ -58,28 +60,55 @@ function loadPicker(): Promise<void> {
 }
 
 export function DriveImportButton({
-  onExtracted,
+  onBatch,
 }: {
-  onExtracted: (receipt: ExtractedReceipt) => void;
+  onBatch: (results: DriveImportResult[]) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
 
-  async function importFile(fileId: string) {
-    const response = await fetch("/api/drive/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileId }),
-    });
-    const data = await response.json().catch(() => ({}));
+  async function importFiles(fileIds: string[]) {
+    setBusy(true);
+    const results: DriveImportResult[] = [];
+    let failures = 0;
 
-    if (!response.ok) {
-      throw new Error(data.error || "Impossible de lire ce fichier Drive.");
+    for (let index = 0; index < fileIds.length; index += 1) {
+      setProgress({ done: index, total: fileIds.length });
+      try {
+        const response = await fetch("/api/drive/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId: fileIds[index] }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.error || "Impossible de lire ce fichier Drive.");
+        }
+
+        results.push({ ...(data as DriveImportResult), fileId: fileIds[index] });
+      } catch (error) {
+        failures += 1;
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Impossible de lire un fichier Drive.",
+        );
+      }
     }
 
-    onExtracted(data as ExtractedReceipt);
-    toast.success("Ticket lu depuis Drive", {
-      description: "Vérifiez les informations avant d'enregistrer.",
-    });
+    setProgress(null);
+    setBusy(false);
+
+    if (results.length > 0) {
+      onBatch(results);
+    }
+
+    if (failures > 0 && results.length === 0) {
+      toast.error("Aucun ticket n'a pu être lu.");
+    }
   }
 
   async function openPicker() {
@@ -114,6 +143,7 @@ export function DriveImportButton({
         .setOAuthToken(accessToken)
         .setDeveloperKey(apiKey)
         .setAppId(appId)
+        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
         .addView(
           new window.google.picker.DocsView(
             window.google.picker.ViewId.DOCS,
@@ -121,23 +151,25 @@ export function DriveImportButton({
             .setMimeTypes("application/pdf,image/jpeg,image/png,image/webp")
             .setIncludeFolders(false),
         )
-        .setTitle("Choisir un ticket dans Google Drive")
+        .setTitle(`Choisir jusqu'à ${MAX_FILES} tickets dans Google Drive`)
         .setCallback((data: any) => {
           if (data.action === window.google.picker.Action.PICKED) {
-            const fileId = data.docs?.[0]?.id;
-            if (!fileId) {
+            const ids: string[] = (data.docs ?? [])
+              .map((doc: { id?: string }) => doc.id)
+              .filter((id: string | undefined): id is string => Boolean(id));
+
+            if (ids.length === 0) {
               setBusy(false);
               return;
             }
-            void importFile(fileId)
-              .catch((error) => {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "Impossible de lire ce fichier Drive.",
-                );
-              })
-              .finally(() => setBusy(false));
+
+            if (ids.length > MAX_FILES) {
+              toast.error(
+                `Vous avez sélectionné ${ids.length} tickets. Seuls les ${MAX_FILES} premiers seront importés.`,
+              );
+            }
+
+            void importFiles(ids.slice(0, MAX_FILES));
             return;
           }
 
@@ -158,6 +190,12 @@ export function DriveImportButton({
     }
   }
 
+  const label = progress
+    ? `Lecture ${Math.min(progress.done + 1, progress.total)}/${progress.total}…`
+    : busy
+      ? "Ouverture de Drive…"
+      : "Importer depuis Google Drive";
+
   return (
     <div>
       <button
@@ -171,10 +209,10 @@ export function DriveImportButton({
         ) : (
           <FolderOpen className="size-4 text-emerald-600" />
         )}
-        {busy ? "Lecture du fichier…" : "Importer depuis Google Drive"}
+        {label}
       </button>
       <p className="mt-1.5 text-center text-[10px] text-stone-400">
-        PDF ou photo déjà présent dans votre Drive, un ticket à la fois.
+        PDF ou photos déjà présents dans votre Drive, jusqu'à {MAX_FILES} tickets.
       </p>
     </div>
   );

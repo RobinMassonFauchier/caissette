@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -56,6 +57,37 @@ export function WorkspaceProvider({
   const setSettings = useCallback((settings: AppSettings) => {
     setData((current) => ({ ...current, settings }));
   }, []);
+
+  // Rafraîchit les données quand l'onglet redevient actif et toutes les 2 min,
+  // pour refléter aussi les modifications faites directement dans le Sheet.
+  useEffect(() => {
+    let lastRefresh = 0;
+
+    const refreshIfVisible = () => {
+      if (typeof document === "undefined" || document.visibilityState !== "visible") {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastRefresh < 5_000) return;
+      lastRefresh = now;
+      void refresh().catch(() => undefined);
+    };
+
+    const onFocus = () => refreshIfVisible();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshIfVisible();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = window.setInterval(refreshIfVisible, 120_000);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(interval);
+    };
+  }, [refresh]);
 
   return (
     <WorkspaceContext.Provider value={{ ...data, refresh, setSettings }}>

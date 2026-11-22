@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -232,13 +233,13 @@ export function StatsView() {
               Ajoutez un ticket pour voir vos tendances, votre répartition par
               catégorie et votre budget.
             </p>
-            <a
+            <Link
               href="/app"
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
             >
               Ajouter un ticket
               <ArrowRight className="size-4" />
-            </a>
+            </Link>
           </section>
         ) : (
           <>
@@ -501,13 +502,13 @@ export function StatsView() {
                         Fixez un budget mensuel pour suivre vos limites en un
                         coup d'œil.
                       </p>
-                      <a
+                      <Link
                         href="/app/settings"
                         className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-[12px] font-medium text-stone-700 transition hover:border-stone-400"
                       >
                         <Settings2 className="size-3.5" />
                         Définir un budget
-                      </a>
+                      </Link>
                     </div>
                   )}
                 </section>
