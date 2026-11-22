@@ -31,7 +31,30 @@ import type { Category, Expense } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MONTH_LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const MONTH_NAMES = [
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+];
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const WEEKDAY_NAMES = [
+  "Lundi",
+  "Mardi",
+  "Mercredi",
+  "Jeudi",
+  "Vendredi",
+  "Samedi",
+  "Dimanche",
+];
 
 function monthOf(expense: Expense): number {
   return Number(expense.date.slice(5, 7)) - 1;
@@ -192,7 +215,7 @@ export function StatsView() {
             <button
               type="button"
               onClick={() => setYear((value) => value - 1)}
-              className="grid size-7 place-items-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-800"
+              className="grid size-9 place-items-center rounded-lg text-stone-600 transition hover:bg-stone-100 hover:text-stone-900"
               aria-label="Année précédente"
             >
               <ArrowRight className="size-4 rotate-180" />
@@ -204,7 +227,7 @@ export function StatsView() {
               type="button"
               onClick={() => setYear((value) => value + 1)}
               disabled={year >= nowYear}
-              className="grid size-7 place-items-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 disabled:opacity-30 disabled:hover:bg-transparent"
+              className="grid size-9 place-items-center rounded-lg text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 disabled:opacity-30 disabled:hover:bg-transparent"
               aria-label="Année suivante"
             >
               <ArrowRight className="size-4" />
@@ -229,13 +252,28 @@ export function StatsView() {
             <h2 className="mt-4 text-base font-semibold text-stone-900">
               Pas encore de statistiques pour {year}
             </h2>
-            <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-stone-500">
+            <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-stone-600">
               Ajoutez un ticket pour voir vos tendances, votre répartition par
               catégorie et votre budget.
             </p>
+            <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-2">
+              {[
+                "Évolution mois par mois",
+                "Répartition par catégorie",
+                "Top magasins",
+                "Budget restant",
+              ].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11.5px] text-stone-600"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
             <Link
               href="/app"
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
             >
               Ajouter un ticket
               <ArrowRight className="size-4" />
@@ -287,16 +325,20 @@ export function StatsView() {
                       <h2 className="text-sm font-semibold text-stone-900">
                         Évolution mensuelle
                       </h2>
-                      <p className="text-[11px] text-stone-500">
-                        Dépenses par mois en {year}
+                      <p className="text-[12px] text-stone-600">
+                        Dépenses par mois en {year}. La barre foncée correspond
+                        au mois en cours.
                       </p>
                     </div>
-                    <span className="text-[11px] text-stone-400">
+                    <span className="text-[11px] text-stone-500">
                       {formatEuro(totalYear)} au total
                     </span>
                   </div>
 
-                  <div className="mt-5 flex h-52 items-end gap-1.5 sm:gap-2">
+                  <div
+                    className="mt-5 flex h-52 items-end gap-1.5 sm:gap-2"
+                    aria-hidden="true"
+                  >
                     {monthlyTotals.map((amount, index) => {
                       const ratio = maxMonth > 0 ? amount / maxMonth : 0;
                       const isCurrent =
@@ -307,7 +349,7 @@ export function StatsView() {
                           className="group flex h-full flex-1 flex-col items-center justify-end gap-1.5"
                           title={`${MONTH_LETTERS[index]} : ${formatEuro(amount)}`}
                         >
-                          <span className="text-[9px] font-medium tabular-nums text-stone-400 opacity-0 transition group-hover:opacity-100">
+                          <span className="text-[9px] font-medium tabular-nums text-stone-500 opacity-0 transition group-hover:opacity-100">
                             {amount > 0 ? formatEuro(amount) : ""}
                           </span>
                           <div
@@ -328,7 +370,7 @@ export function StatsView() {
                               "text-[10px]",
                               isCurrent
                                 ? "font-semibold text-emerald-700"
-                                : "text-stone-400",
+                                : "text-stone-500",
                             )}
                           >
                             {MONTH_LETTERS[index]}
@@ -337,6 +379,13 @@ export function StatsView() {
                       );
                     })}
                   </div>
+                  <ul className="sr-only">
+                    {monthlyTotals.map((amount, index) => (
+                      <li key={index}>
+                        {MONTH_NAMES[index]} : {formatEuro(amount)}
+                      </li>
+                    ))}
+                  </ul>
                 </section>
 
                 <div className="grid gap-6 md:grid-cols-2">
@@ -349,10 +398,15 @@ export function StatsView() {
                     </p>
 
                     <div className="mt-5 flex items-center gap-5">
-                      <div className="relative size-32 shrink-0 rounded-full" style={{ background: donut }}>
+                      <div
+                        className="relative size-32 shrink-0 rounded-full"
+                        style={{ background: donut }}
+                        role="img"
+                        aria-label={`Répartition des dépenses par catégorie, ${formatEuro(totalYear)} au total`}
+                      >
                         <div className="absolute inset-[18px] grid place-items-center rounded-full bg-white">
                           <div className="text-center">
-                            <p className="text-[10px] uppercase tracking-wider text-stone-400">
+                            <p className="text-[10px] uppercase tracking-wider text-stone-500">
                               Total
                             </p>
                             <p className="text-sm font-semibold tabular-nums text-stone-900">
@@ -408,6 +462,11 @@ export function StatsView() {
                             </div>
                             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100">
                               <div
+                                role="progressbar"
+                                aria-label={`Part des dépenses payées par ${payment}`}
+                                aria-valuenow={Math.round(percent)}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
                                 className="h-full rounded-full bg-sky-500"
                                 style={{ width: `${Math.max(3, percent)}%` }}
                               />
@@ -424,11 +483,11 @@ export function StatsView() {
                     <h2 className="text-sm font-semibold text-stone-900">
                       Jours de la semaine
                     </h2>
-                    <span className="text-[11px] text-stone-400">
+                    <span className="text-[11px] text-stone-500">
                       quand dépensez-vous ?
                     </span>
                   </div>
-                  <div className="mt-4 flex h-36 items-end gap-2">
+                  <div className="mt-4 flex h-36 items-end gap-2" aria-hidden="true">
                     {weekdayTotals.map((amount, index) => {
                       const ratio = maxWeekday > 0 ? amount / maxWeekday : 0;
                       return (
@@ -441,13 +500,20 @@ export function StatsView() {
                             className="w-full rounded-t-md bg-violet-200 transition group-hover:bg-violet-300"
                             style={{ height: `${Math.max(3, ratio * 100)}%` }}
                           />
-                          <span className="text-[10px] text-stone-400">
+                          <span className="text-[10px] text-stone-500">
                             {WEEKDAYS[index]}
                           </span>
                         </div>
                       );
                     })}
                   </div>
+                  <ul className="sr-only">
+                    {weekdayTotals.map((amount, index) => (
+                      <li key={index}>
+                        {WEEKDAY_NAMES[index]} : {formatEuro(amount)}
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               </div>
 
@@ -468,7 +534,7 @@ export function StatsView() {
                         <p className="text-lg font-semibold tabular-nums text-stone-900">
                           {formatEuro(currentMonthTotal)}
                         </p>
-                        <p className="text-[11px] text-stone-400">
+                        <p className="text-[11px] text-stone-500">
                           sur {formatEuro(budget)}
                         </p>
                       </div>
@@ -541,7 +607,7 @@ export function StatsView() {
                         {formatEuro(comparison.currentTotal)}
                       </strong>
                     </p>
-                    <p className="mt-0.5 text-[11px] text-stone-400">
+                    <p className="mt-0.5 text-[11px] text-stone-500">
                       mois précédent : {formatEuro(comparison.previousTotal)}
                     </p>
 
@@ -563,7 +629,7 @@ export function StatsView() {
                         {comparison.change.toFixed(0)} % par rapport au mois précédent
                       </p>
                     ) : (
-                      <p className="mt-3 text-[11px] text-stone-400">
+                      <p className="mt-3 text-[11px] text-stone-500">
                         Pas de mois précédent comparable.
                       </p>
                     )}
@@ -609,7 +675,7 @@ export function StatsView() {
                 </section>
 
                 <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-white to-stone-50 p-5 shadow-sm">
-                  <p className="text-[11px] uppercase tracking-wider text-stone-400">
+                  <p className="text-[11px] uppercase tracking-wider text-stone-500">
                     Top catégorie
                   </p>
                   {topCategory ? (
@@ -639,7 +705,7 @@ export function StatsView() {
           </>
         )}
 
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/70 pt-5 text-[11px] text-stone-400">
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/70 pt-5 text-[11px] text-stone-500">
           <p>Caissette · vos tickets, classés sans effort.</p>
           <p>Statistiques calculées à partir de votre Google Sheet.</p>
         </footer>
@@ -666,7 +732,7 @@ function Kpi({
   return (
     <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">
+        <p className="text-[10.5px] font-medium uppercase tracking-wider text-stone-500">
           {label}
         </p>
         <span className={`grid size-7 place-items-center rounded-lg ${tone}`}>
@@ -681,13 +747,13 @@ function Kpi({
       >
         {value}
       </p>
-      <p className="mt-0.5 truncate text-[11px] text-stone-500">{hint}</p>
+      <p className="mt-0.5 truncate text-[11.5px] text-stone-600">{hint}</p>
     </div>
   );
 }
 
 function PaymentIcon({ payment }: { payment: string }) {
-  const className = "size-3.5 text-stone-400";
+  const className = "size-3.5 text-stone-500";
   if (/esp/i.test(payment)) return <Banknote className={className} />;
   if (/ch[eè]que/i.test(payment)) return <Landmark className={className} />;
   if (/virement/i.test(payment)) return <ArrowRight className={className} />;

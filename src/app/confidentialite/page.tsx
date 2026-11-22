@@ -26,7 +26,10 @@ export default function PrivacyPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-5 py-12 sm:px-6 sm:py-16">
+      <main
+        id="contenu"
+        className="mx-auto max-w-3xl px-5 py-12 sm:px-6 sm:py-16"
+      >
         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800">
           <ShieldCheck className="size-3.5" />
           Données hébergées chez vous

@@ -179,7 +179,7 @@ export function BatchImportDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+              className="min-h-11 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
             >
               Annuler
             </button>
@@ -187,7 +187,7 @@ export function BatchImportDialog({
               type="button"
               onClick={importAll}
               disabled={saving || selectedCount === 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
             >
               {saving ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -202,6 +202,11 @@ export function BatchImportDialog({
       }
     >
       <div className="space-y-3">
+        <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-[12px] leading-relaxed text-stone-600">
+          Les tickets incomplets sont décochés par défaut. Vérifiez les champs,
+          décochez ce que vous ne voulez pas importer, puis validez.
+        </p>
+
         {error && (
           <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
             {error}
@@ -239,7 +244,7 @@ export function BatchImportDialog({
                       href={row.receiptUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] text-stone-400 hover:text-emerald-700"
+                      className="inline-flex items-center gap-1 text-[10px] text-stone-500 hover:text-emerald-700"
                     >
                       Ouvrir
                       <ExternalLink className="size-2.5" />
@@ -264,7 +269,7 @@ export function BatchImportDialog({
                       updateRow(row.id, { merchant: event.target.value })
                     }
                     placeholder="Magasin"
-                    className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[12px] text-stone-800 outline-none placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[12px] text-stone-800 outline-none placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
                     aria-label="Magasin"
                   />
                   <div className="relative">
@@ -276,10 +281,10 @@ export function BatchImportDialog({
                         updateRow(row.id, { amount: event.target.value })
                       }
                       placeholder="0,00"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 pr-6 text-[12px] tabular-nums text-stone-800 outline-none placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 pr-6 text-[12px] tabular-nums text-stone-800 outline-none placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
                       aria-label="Montant"
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-stone-400">
+                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-stone-500">
                       €
                     </span>
                   </div>

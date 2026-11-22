@@ -2,9 +2,11 @@
 
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -35,23 +37,38 @@ export function WorkspaceProvider({
   children: ReactNode;
 }) {
   const [data, setData] = useState<WorkspaceData>(initial);
+  const inFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/workspace", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
+    // Évite plusieurs appels simultanés (focus + intervalle + action utilisateur).
+    if (inFlight.current) return inFlight.current;
 
-    if (!response.ok) {
-      throw new Error(payload.error || "Impossible de recharger vos données.");
+    const task = (async () => {
+      const response = await fetch("/api/workspace", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Impossible de recharger vos données.");
+      }
+
+      startTransition(() => {
+        setData((current) => ({
+          ...current,
+          expenses: payload.expenses ?? [],
+          settings: payload.settings ?? current.settings,
+          sheetUrl: payload.sheetUrl ?? current.sheetUrl,
+          folderId: payload.folderId ?? current.folderId,
+          error: null,
+        }));
+      });
+    })();
+
+    inFlight.current = task;
+    try {
+      await task;
+    } finally {
+      inFlight.current = null;
     }
-
-    setData((current) => ({
-      ...current,
-      expenses: payload.expenses ?? [],
-      settings: payload.settings ?? current.settings,
-      sheetUrl: payload.sheetUrl ?? current.sheetUrl,
-      folderId: payload.folderId ?? current.folderId,
-      error: null,
-    }));
   }, []);
 
   const setSettings = useCallback((settings: AppSettings) => {
@@ -68,7 +85,7 @@ export function WorkspaceProvider({
         return;
       }
       const now = Date.now();
-      if (now - lastRefresh < 5_000) return;
+      if (now - lastRefresh < 15_000) return;
       lastRefresh = now;
       void refresh().catch(() => undefined);
     };

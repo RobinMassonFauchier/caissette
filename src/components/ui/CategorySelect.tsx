@@ -246,9 +246,9 @@ export function CategorySelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        aria-label={ariaLabel}
+        aria-label={`${ariaLabel} : ${selected.label}`}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-[13px] text-stone-700 shadow-sm outline-none transition hover:border-stone-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15",
+          "flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-[13px] text-stone-700 shadow-sm outline-none transition hover:border-stone-300 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15",
           triggerClass,
           className,
         )}
@@ -266,7 +266,7 @@ export function CategorySelect({
         </span>
         <ChevronDown
           className={cn(
-            "size-3.5 shrink-0 text-stone-400 transition",
+            "size-3.5 shrink-0 text-stone-500 transition",
             open && "rotate-180",
           )}
         />

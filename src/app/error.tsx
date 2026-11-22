@@ -23,7 +23,10 @@ export default function ErrorPage({
         </a>
       </header>
 
-      <main className="mx-auto flex max-w-md flex-col items-center px-6 pb-24 pt-16 text-center">
+      <main
+        id="contenu"
+        className="mx-auto flex max-w-md flex-col items-center px-6 pb-24 pt-16 text-center"
+      >
         <span className="grid size-14 place-items-center rounded-2xl bg-rose-50 text-rose-500 ring-1 ring-inset ring-rose-600/10">
           <TriangleAlert className="size-6" />
         </span>

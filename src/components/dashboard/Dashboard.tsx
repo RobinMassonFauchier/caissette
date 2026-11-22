@@ -4,10 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Calculator,
+  Camera,
+  CheckCircle2,
+  CircleHelp,
   ReceiptText,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Table2,
   Tag,
   Target,
   TriangleAlert,
@@ -54,17 +58,29 @@ export default function Dashboard() {
     [expenses, month],
   );
 
-  const total = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const count = monthExpenses.length;
-  const average = count > 0 ? total / count : 0;
+  const summary = useMemo(() => {
+    const total = monthExpenses.reduce(
+      (sum, expense) => sum + expense.amount,
+      0,
+    );
+    const count = monthExpenses.length;
+    const average = count > 0 ? total / count : 0;
 
-  const topCategory = useMemo(() => {
     const totals = new Map<string, number>();
     for (const expense of monthExpenses) {
-      totals.set(expense.category, (totals.get(expense.category) ?? 0) + expense.amount);
+      totals.set(
+        expense.category,
+        (totals.get(expense.category) ?? 0) + expense.amount,
+      );
     }
-    return [...totals.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+    const topCategory =
+      [...totals.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+
+    return { total, count, average, topCategory };
   }, [monthExpenses]);
+
+  const { total, count, average, topCategory } = summary;
+  const hasAnyExpense = expenses.length > 0;
 
   const firstName = user.name?.split(" ")[0] || "vous";
 
@@ -170,7 +186,14 @@ export default function Dashboard() {
             <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-stone-900 sm:text-[28px]">
               Vos dépenses
             </h1>
-            <p className="mt-1 text-[12px] capitalize text-stone-400">{monthLabel(month)}</p>
+            <p className="mt-1 text-[12px] capitalize text-stone-500">{monthLabel(month)}</p>
+            <Link
+              href="/app/aide"
+              className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+            >
+              <CircleHelp className="size-3.5" />
+              Comment ça marche ?
+            </Link>
           </div>
           <MonthSwitcher month={month} onChange={setMonth} />
         </div>
@@ -196,6 +219,78 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
+            {!hasAnyExpense && (
+              <section className="mb-6 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50/60 p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-xl">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+                      <Sparkles className="size-3.5" />
+                      Bienvenue {firstName} !
+                    </span>
+                    <h2 className="mt-3 text-lg font-semibold tracking-tight text-stone-900 sm:text-xl">
+                      Votre premier ticket en 30 secondes
+                    </h2>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-stone-700">
+                      Pas de compte à créer, pas d&apos;application à installer.
+                      Prenez une photo du ticket ou déposez son PDF : Caissette
+                      remplit votre Google Sheet automatiquement.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <a
+                        href="#ajouter"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                      >
+                        <Camera className="size-4" />
+                        Ajouter mon premier ticket
+                      </a>
+                      <Link
+                        href="/app/aide"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-[13.5px] font-medium text-stone-800 shadow-sm transition hover:border-stone-400"
+                      >
+                        <CircleHelp className="size-4 text-stone-500" />
+                        Voir le guide
+                      </Link>
+                    </div>
+                  </div>
+
+                  <ol className="grid gap-2 sm:grid-cols-3 lg:w-[430px]">
+                    {[
+                      {
+                        icon: Camera,
+                        title: "1. Photographiez",
+                        text: "Le ticket bien à plat, en entier.",
+                      },
+                      {
+                        icon: CheckCircle2,
+                        title: "2. Vérifiez",
+                        text: "Date, magasin et montant sont pré-remplis.",
+                      },
+                      {
+                        icon: Table2,
+                        title: "3. C'est rangé",
+                        text: "La ligne arrive dans votre Sheet.",
+                      },
+                    ].map(({ icon: Icon, title, text }) => (
+                      <li
+                        key={title}
+                        className="rounded-xl border border-white bg-white/80 p-3 shadow-sm"
+                      >
+                        <span className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                          <Icon className="size-4" />
+                        </span>
+                        <p className="mt-2 text-[12px] font-semibold text-stone-900">
+                          {title}
+                        </p>
+                        <p className="mt-0.5 text-[11.5px] leading-relaxed text-stone-600">
+                          {text}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </section>
+            )}
+
             <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
               <StatCard
                 label="Total"
@@ -205,14 +300,14 @@ export default function Dashboard() {
                 tone="bg-emerald-50 text-emerald-700"
               />
               <StatCard
-                label="Ticket moyen"
+                label="Dépense moyenne"
                 value={average > 0 ? formatEuro(average) : "—"}
-                hint="sur la période"
+                hint="par ticket"
                 icon={Calculator}
                 tone="bg-sky-50 text-sky-700"
               />
               <StatCard
-                label="Tickets"
+                label="Nombre de tickets"
                 value={String(count)}
                 hint={`${formatEuro(total)} cumulés`}
                 icon={ReceiptText}
@@ -282,7 +377,7 @@ export default function Dashboard() {
                       Évitez les reflets et les plis.
                     </li>
                   </ul>
-                  <p className="mt-4 flex items-start gap-1.5 border-t border-stone-200/70 pt-3 text-[11px] leading-relaxed text-stone-400">
+                  <p className="mt-4 flex items-start gap-1.5 border-t border-stone-200/70 pt-3 text-[11px] leading-relaxed text-stone-500">
                     <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
                     Feuille et justificatifs restent dans votre Google Drive.
                   </p>
@@ -292,7 +387,7 @@ export default function Dashboard() {
           </>
         )}
 
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/70 pt-5 text-[11px] text-stone-400">
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/70 pt-5 text-[11px] text-stone-500">
           <p>Caissette · vos tickets, classés sans effort.</p>
           <p>OCR local · aucune donnée revendue</p>
         </footer>
@@ -400,12 +495,12 @@ function BudgetCard({
           </span>
           <div>
             <h2 className="text-sm font-semibold text-stone-900">Budget</h2>
-            <p className="text-[10px] capitalize text-stone-400">{label}</p>
+            <p className="text-[10px] capitalize text-stone-500">{label}</p>
           </div>
         </div>
         <Link
           href="/app/settings"
-          className="text-[11px] text-stone-400 transition hover:text-stone-600 hover:underline"
+          className="text-[11px] text-stone-500 transition hover:text-stone-600 hover:underline"
         >
           Modifier
         </Link>
@@ -415,7 +510,7 @@ function BudgetCard({
         <p className="text-lg font-semibold tabular-nums text-stone-900">
           {formatEuro(spent)}
         </p>
-        <p className="text-[11px] text-stone-400">sur {formatEuro(budget)}</p>
+        <p className="text-[11px] text-stone-500">sur {formatEuro(budget)}</p>
       </div>
 
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
@@ -464,7 +559,7 @@ function StatCard({
   return (
     <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">
+        <p className="text-[10.5px] font-medium uppercase tracking-wider text-stone-500">
           {label}
         </p>
         <span className={`grid size-7 place-items-center rounded-lg ${tone}`}>
@@ -478,7 +573,7 @@ function StatCard({
       >
         {value}
       </p>
-      <p className="mt-0.5 truncate text-[11px] text-stone-500">{hint}</p>
+      <p className="mt-0.5 truncate text-[11.5px] text-stone-600">{hint}</p>
     </div>
   );
 }

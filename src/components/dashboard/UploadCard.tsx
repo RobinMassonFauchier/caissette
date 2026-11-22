@@ -1,12 +1,65 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Loader2, UploadCloud } from "lucide-react";
+import { Camera, FolderOpen, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import type { ExtractedReceipt } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MAX_SIZE = 15 * 1024 * 1024;
+const MAX_DIMENSION = 2200;
+
+/**
+ * Réduit les photos trop lourdes avant l'envoi : l'OCR est plus rapide et
+ * l'utilisateur n'attend pas plusieurs minutes sur une connexion mobile.
+ */
+async function prepareFile(file: File): Promise<File> {
+  const compressible =
+    file.type === "image/jpeg" ||
+    file.type === "image/png" ||
+    file.type === "image/webp";
+
+  if (!compressible) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longestSide = Math.max(bitmap.width, bitmap.height);
+    const scale = Math.min(1, MAX_DIMENSION / longestSide);
+
+    if (scale === 1 && file.size <= 2.5 * 1024 * 1024) {
+      bitmap.close();
+      return file;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
+
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.88),
+    );
+
+    if (!blob || blob.size >= file.size) return file;
+
+    return new File(
+      [blob],
+      `${file.name.replace(/\.[^.]+$/, "") || "ticket"}.jpg`,
+      { type: "image/jpeg", lastModified: Date.now() },
+    );
+  } catch {
+    // Format non décodable par le navigateur (HEIC…) : on envoie l'original.
+    return file;
+  }
+}
 
 export function UploadCard({
   onExtracted,
@@ -16,6 +69,7 @@ export function UploadCard({
   children?: React.ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<null | "upload" | "analyze">(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +79,7 @@ export function UploadCard({
     setError(null);
 
     if (file.size === 0) {
-      setError("Ce fichier est vide.");
+      setError("Ce fichier est vide. Choisissez-en un autre.");
       return;
     }
     if (file.size > MAX_SIZE) {
@@ -47,8 +101,9 @@ export function UploadCard({
     const analyzeTimer = setTimeout(() => setBusy("analyze"), 1400);
 
     try {
+      const prepared = await prepareFile(file);
       const body = new FormData();
-      body.append("file", file);
+      body.append("file", prepared);
 
       const response = await fetch("/api/extract", { method: "POST", body });
       const data = await response.json().catch(() => ({}));
@@ -72,25 +127,36 @@ export function UploadCard({
       clearTimeout(analyzeTimer);
       setBusy(null);
       if (inputRef.current) inputRef.current.value = "";
+      if (cameraRef.current) cameraRef.current.value = "";
     }
   }
 
+  function openPicker() {
+    if (busy) return;
+    inputRef.current?.click();
+  }
+
   return (
-    <section className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm">
+    <section
+      id="ajouter"
+      className="scroll-mt-24 overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm"
+    >
       <div className="flex items-center justify-between gap-3 border-b border-stone-100 px-4 py-3.5 sm:px-5">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
-            <Camera className="size-4" />
+          <span className="grid size-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+            <Camera className="size-4.5" />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-stone-900">Ajouter un ticket</h2>
-            <p className="text-[11px] text-stone-500">
+            <h2 className="text-[15px] font-semibold text-stone-900">
+              Ajouter un ticket
+            </h2>
+            <p className="text-[12px] text-stone-600">
               Photo ou PDF · lecture automatique
             </p>
           </div>
         </div>
-        <span className="hidden rounded-full bg-stone-100 px-2.5 py-1 text-[10px] font-medium text-stone-500 sm:inline">
-          Gratuit · sur votre machine
+        <span className="hidden rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-600 sm:inline">
+          Gratuit · sans installation
         </span>
       </div>
 
@@ -100,18 +166,29 @@ export function UploadCard({
           type="file"
           accept="application/pdf,image/*"
           className="hidden"
+          aria-label="Choisir un fichier PDF ou une photo"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void handleFile(file);
+          }}
+        />
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          aria-label="Prendre une photo du ticket"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void handleFile(file);
           }}
         />
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
+        <div
           onDragOver={(event) => {
             event.preventDefault();
-            setDragging(true);
+            if (!busy) setDragging(true);
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => {
@@ -120,53 +197,75 @@ export function UploadCard({
             const file = event.dataTransfer.files?.[0];
             if (file) void handleFile(file);
           }}
-          disabled={busy !== null}
           className={cn(
-            "flex w-full flex-col items-center justify-center rounded-xl border border-dashed px-5 py-8 text-center transition",
+            "flex w-full flex-col items-center justify-center rounded-xl border border-dashed px-5 py-7 text-center transition",
             dragging
               ? "border-emerald-500 bg-emerald-50/70"
-              : "border-stone-300 bg-stone-50/50 hover:border-emerald-400 hover:bg-emerald-50/40",
-            busy !== null && "cursor-wait",
+              : "border-stone-300 bg-stone-50/50",
           )}
         >
           {busy !== null ? (
-            <>
-              <span className="relative grid size-11 place-items-center rounded-full bg-white text-emerald-600 shadow-sm">
+            <div role="status" aria-live="polite">
+              <span className="relative mx-auto grid size-12 place-items-center rounded-full bg-white text-emerald-600 shadow-sm">
                 <Loader2 className="size-5 animate-spin" />
               </span>
-              <span className="mt-3 text-sm font-medium text-stone-800">
-                {busy === "upload" ? "Envoi du ticket…" : "Lecture du ticket…"}
+              <span className="mt-3 block text-[15px] font-medium text-stone-800">
+                {busy === "upload"
+                  ? "Envoi du ticket…"
+                  : "Lecture du ticket…"}
               </span>
-              <span className="mt-1 text-xs text-stone-500">
-                Reconnaissance du texte et des montants, quelques secondes.
+              <span className="mt-1 block text-[13px] text-stone-600">
+                Reconnaissance du texte et des montants. Cela peut prendre
+                quelques secondes.
               </span>
-              <span className="mt-4 h-1.5 w-52 overflow-hidden rounded-full bg-stone-200/80">
+              <span className="mx-auto mt-4 block h-1.5 w-52 overflow-hidden rounded-full bg-stone-200/80">
                 <span className="block h-full w-1/2 animate-pulse rounded-full bg-emerald-500" />
               </span>
-            </>
+            </div>
           ) : (
             <>
-              <span className="grid size-11 place-items-center rounded-full bg-white text-emerald-600 shadow-sm ring-1 ring-stone-200">
+              <span className="grid size-12 place-items-center rounded-full bg-white text-emerald-600 shadow-sm ring-1 ring-stone-200">
                 <UploadCloud className="size-5" />
               </span>
-              <span className="mt-3 text-sm font-medium text-stone-800">
+              <span className="mt-3 text-[15px] font-medium text-stone-800">
                 Déposez un ticket ici
               </span>
-              <span className="mt-1 text-xs text-stone-500">
+              <span className="mt-1 text-[12.5px] text-stone-600">
                 PDF du magasin ou photo bien nette · 15 Mo max
               </span>
-              <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-stone-900 px-3.5 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-stone-800">
-                Choisir un fichier
-              </span>
-              <span className="mt-3 text-[11px] text-stone-400">
-                Sur mobile, vous pouvez prendre la photo directement.
+
+              <div className="mt-4 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => cameraRef.current?.click()}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-[13.5px] font-semibold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700"
+                >
+                  <Camera className="size-4" />
+                  Prendre une photo
+                </button>
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-[13.5px] font-medium text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50"
+                >
+                  <FolderOpen className="size-4 text-stone-500" />
+                  Choisir un fichier
+                </button>
+              </div>
+
+              <span className="mt-3 text-[11.5px] text-stone-500">
+                Sur téléphone, « Prendre une photo » ouvre directement
+                l&apos;appareil.
               </span>
             </>
           )}
-        </button>
+        </div>
 
         {error && (
-          <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700"
+          >
             {error}
           </p>
         )}

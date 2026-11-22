@@ -66,13 +66,17 @@ export function ExpenseTable({
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full min-w-0 sm:w-52 sm:flex-none">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-stone-400" />
+            <label htmlFor="expense-search" className="sr-only">
+              Rechercher dans les tickets
+            </label>
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" />
             <input
+              id="expense-search"
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Rechercher…"
-              className="w-full rounded-lg border border-stone-200 bg-stone-50/60 py-1.5 pl-8 pr-3 text-[13px] text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
+              placeholder="Rechercher un magasin, une note…"
+              className="w-full rounded-lg border border-stone-200 bg-stone-50/60 py-2 pl-8 pr-3 text-[13px] text-stone-800 outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
             />
           </div>
 
@@ -88,7 +92,7 @@ export function ExpenseTable({
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700"
           >
             <Plus className="size-3.5" strokeWidth={2.5} />
             Ajouter
@@ -98,7 +102,7 @@ export function ExpenseTable({
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center px-6 py-14 text-center">
-          <span className="grid size-14 place-items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-400">
+          <span className="grid size-14 place-items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500">
             <ReceiptText className="size-6" />
           </span>
           <p className="mt-4 text-sm font-medium text-stone-800">
@@ -148,7 +152,7 @@ export function ExpenseTable({
                       </span>
                     </div>
                     {expense.note && (
-                      <p className="mt-1 truncate text-[11px] text-stone-400">{expense.note}</p>
+                      <p className="mt-1 truncate text-[11px] text-stone-500">{expense.note}</p>
                     )}
                   </button>
                   <p className="shrink-0 text-sm font-semibold tabular-nums text-stone-900">
@@ -161,27 +165,29 @@ export function ExpenseTable({
                       href={expense.receiptUrl}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Voir le ticket"
-                      className="grid size-7 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11.5px] font-medium text-stone-600 transition hover:bg-stone-100 hover:text-stone-800"
                     >
                       <Paperclip className="size-3.5" />
+                      Ticket
                     </a>
                   )}
                   <button
                     type="button"
                     onClick={() => onEdit(expense)}
-                    aria-label="Modifier"
-                    className="grid size-7 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+                    aria-label={`Modifier ${expense.merchant}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11.5px] font-medium text-stone-600 transition hover:bg-stone-100 hover:text-stone-800"
                   >
                     <Pencil className="size-3.5" />
+                    Modifier
                   </button>
                   <button
                     type="button"
                     onClick={() => onDelete(expense)}
-                    aria-label="Supprimer"
-                    className="grid size-7 place-items-center rounded-md text-stone-400 transition hover:bg-rose-50 hover:text-rose-600"
+                    aria-label={`Supprimer ${expense.merchant}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11.5px] font-medium text-stone-600 transition hover:bg-rose-50 hover:text-rose-700"
                   >
                     <Trash2 className="size-3.5" />
+                    Supprimer
                   </button>
                 </div>
               </li>
@@ -191,14 +197,20 @@ export function ExpenseTable({
           {/* Version desktop : tableau */}
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left">
+              <caption className="sr-only">
+                Liste des tickets du mois sélectionné. Chaque ligne peut être
+                modifiée ou supprimée.
+              </caption>
               <thead>
-                <tr className="border-b border-stone-100 bg-stone-50/60 text-[10px] uppercase tracking-wider text-stone-400">
-                  <th className="px-5 py-2.5 font-medium">Date</th>
-                  <th className="px-3 py-2.5 font-medium">Magasin</th>
-                  <th className="px-3 py-2.5 font-medium">Catégorie</th>
-                  <th className="px-3 py-2.5 font-medium">Paiement</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Montant</th>
-                  <th className="w-24 px-5 py-2.5" />
+                <tr className="border-b border-stone-100 bg-stone-50/60 text-[11px] uppercase tracking-wider text-stone-500">
+                  <th scope="col" className="px-5 py-2.5 font-medium">Date</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Magasin</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Catégorie</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Paiement</th>
+                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Montant</th>
+                  <th scope="col" className="w-24 px-5 py-2.5">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -225,7 +237,7 @@ export function ExpenseTable({
                         )}
                       </div>
                       {expense.note && (
-                        <p className="mt-0.5 truncate text-[11px] text-stone-400">
+                        <p className="mt-0.5 truncate text-[11px] text-stone-500">
                           {expense.note}
                         </p>
                       )}
@@ -251,16 +263,16 @@ export function ExpenseTable({
                         <button
                           type="button"
                           onClick={() => onEdit(expense)}
-                          aria-label="Modifier"
-                          className="grid size-7 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+                          aria-label={`Modifier ${expense.merchant}`}
+                          className="grid size-8 place-items-center rounded-md text-stone-500 transition hover:bg-stone-100 hover:text-stone-800"
                         >
                           <Pencil className="size-3.5" />
                         </button>
                         <button
                           type="button"
                           onClick={() => onDelete(expense)}
-                          aria-label="Supprimer"
-                          className="grid size-7 place-items-center rounded-md text-stone-400 transition hover:bg-rose-50 hover:text-rose-600"
+                          aria-label={`Supprimer ${expense.merchant}`}
+                          className="grid size-8 place-items-center rounded-md text-stone-500 transition hover:bg-rose-50 hover:text-rose-600"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
@@ -273,7 +285,7 @@ export function ExpenseTable({
           </div>
 
           <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/50 px-4 py-3 sm:px-5">
-            <span className="text-[11px] uppercase tracking-wider text-stone-400">
+            <span className="text-[11px] uppercase tracking-wider text-stone-500">
               Total affiché
             </span>
             <span className="text-sm font-semibold tabular-nums text-stone-900">

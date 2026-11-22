@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   Check,
+  CircleHelp,
   ExternalLink,
   FolderOpen,
   Gauge,
@@ -74,6 +77,26 @@ export function SettingsView() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const savedBudget = settings.monthlyBudget
+    ? String(settings.monthlyBudget).replace(".", ",")
+    : "";
+  const dirty =
+    budget.trim() !== savedBudget.trim() ||
+    defaultCategory !== settings.defaultCategory ||
+    driveImportEnabled !== settings.driveImportEnabled;
+
+  useEffect(() => {
+    if (!dirty || saving) return;
+
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, saving]);
 
   async function save() {
     setFormError(null);
@@ -179,15 +202,18 @@ export function SettingsView() {
                       type="text"
                       inputMode="decimal"
                       value={budget}
-                      onChange={(event) => setBudget(event.target.value)}
+                      onChange={(event) => {
+                        setBudget(event.target.value);
+                        setSaved(false);
+                      }}
                       placeholder="Par exemple 900,00"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 pr-9 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 pr-9 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-400">
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
                       €
                     </span>
                   </div>
-                  <span className="mt-1 block text-[11px] text-stone-400">
+                  <span className="mt-1 block text-[11px] text-stone-500">
                     Laissez vide pour ne pas afficher de budget.
                   </span>
                 </label>
@@ -199,12 +225,15 @@ export function SettingsView() {
                   <CategorySelect
                     value={defaultCategory}
                     onChange={(value) => {
-                      if (value !== "all") setDefaultCategory(value);
+                      if (value !== "all") {
+                        setDefaultCategory(value);
+                        setSaved(false);
+                      }
                     }}
                     ariaLabel="Catégorie par défaut"
                     className="!py-2"
                   />
-                  <span className="mt-1 block text-[11px] text-stone-400">
+                  <span className="mt-1 block text-[11px] text-stone-500">
                     Proposition lors d'un ajout manuel.
                   </span>
                 </div>
@@ -239,7 +268,10 @@ export function SettingsView() {
                   </div>
                   <Toggle
                     checked={driveImportEnabled}
-                    onChange={setDriveImportEnabled}
+                    onChange={(value) => {
+                      setDriveImportEnabled(value);
+                      setSaved(false);
+                    }}
                     label="Activer l'import Google Drive"
                   />
                 </div>
@@ -248,7 +280,7 @@ export function SettingsView() {
                   <div>
                     <p className="flex items-center gap-2 text-[13px] font-medium text-stone-800">
                       Gmail
-                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-500">
+                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10.5px] font-medium text-stone-600">
                         Non activé
                       </span>
                     </p>
@@ -292,7 +324,7 @@ export function SettingsView() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/60 px-3.5 py-3 text-[13px] font-medium text-stone-700 transition hover:border-stone-300 hover:bg-white"
                 >
                   Ouvrir le Google Sheet
-                  <ExternalLink className="size-3.5 text-stone-400" />
+                  <ExternalLink className="size-3.5 text-stone-500" />
                 </a>
                 <a
                   href={folderUrl || "#"}
@@ -301,34 +333,56 @@ export function SettingsView() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/60 px-3.5 py-3 text-[13px] font-medium text-stone-700 transition hover:border-stone-300 hover:bg-white"
                 >
                   Ouvrir le dossier des tickets
-                  <ExternalLink className="size-3.5 text-stone-400" />
+                  <ExternalLink className="size-3.5 text-stone-500" />
                 </a>
               </div>
 
-              <p className="mt-3 text-[11px] leading-relaxed text-stone-400">
+              <p className="mt-3 text-[11px] leading-relaxed text-stone-500">
                 Caissette ne stocke aucune donnée sur son serveur. La feuille et
                 les justificatifs restent dans votre Drive.
               </p>
             </section>
 
             {formError && (
-              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+              <p
+                role="alert"
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700"
+              >
                 {formError}
               </p>
             )}
 
-            <div className="flex items-center justify-end gap-3">
-              {saved && (
-                <span className="inline-flex items-center gap-1.5 text-[12px] text-emerald-700">
-                  <Check className="size-3.5" />
-                  Enregistré
-                </span>
-              )}
+            <div className="sticky bottom-20 z-10 -mx-4 flex flex-col gap-2 border-t border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between md:static md:mx-0 md:border-0 md:bg-transparent md:p-0">
+              <p
+                role="status"
+                aria-live="polite"
+                className={cn(
+                  "flex items-center gap-1.5 text-[12px]",
+                  dirty ? "text-amber-700" : "text-stone-500",
+                )}
+              >
+                {dirty ? (
+                  <>
+                    <span className="size-1.5 rounded-full bg-amber-500" />
+                    Modifications non enregistrées
+                  </>
+                ) : saved ? (
+                  <>
+                    <Check className="size-3.5 text-emerald-600" />
+                    Paramètres enregistrés
+                  </>
+                ) : (
+                  <>
+                    <Check className="size-3.5 text-stone-500" />
+                    Vos paramètres sont à jour
+                  </>
+                )}
+              </p>
               <button
                 type="button"
                 onClick={save}
-                disabled={saving || Boolean(error)}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
+                disabled={saving || Boolean(error) || !dirty}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-50"
               >
                 {saving ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -377,6 +431,25 @@ export function SettingsView() {
                   Se déconnecter
                 </a>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm">
+              <p className="flex items-center gap-2 text-[13px] font-semibold text-stone-800">
+                <CircleHelp className="size-4 text-emerald-600" />
+                Besoin d&apos;aide ?
+              </p>
+              <p className="mt-2 text-[12px] leading-relaxed text-stone-600">
+                Ajouter un ticket, comprendre les statistiques, installer
+                Caissette sur votre téléphone : le guide répond aux questions
+                courantes en langage simple.
+              </p>
+              <Link
+                href="/app/aide"
+                className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:underline"
+              >
+                Ouvrir le guide
+                <ArrowRight className="size-3" />
+              </Link>
             </section>
 
             <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-white to-stone-50 p-5 shadow-sm">

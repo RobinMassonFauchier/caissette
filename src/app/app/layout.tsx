@@ -53,7 +53,11 @@ export default async function AppLayout({
         error,
       }}
     >
-      <div className="min-h-screen bg-stone-50">
+      <div
+        id="contenu"
+        tabIndex={-1}
+        className="min-h-screen bg-stone-50 pb-safe-nav outline-none md:pb-0"
+      >
         <AppHeader user={session.user} sheetUrl={sheetUrl} />
         {children}
       </div>

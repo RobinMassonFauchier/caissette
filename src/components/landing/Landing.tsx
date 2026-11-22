@@ -14,16 +14,16 @@ import { Logo } from "@/components/Logo";
 
 const ERROR_MESSAGES: Record<string, string> = {
   config:
-    "Configuration incomplète : renseignez GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans .env.local, puis redémarrez l'application.",
+    "La configuration de Caissette est incomplète. Contactez la personne qui gère l'application.",
   forbidden:
-    "Ce compte Google n'est pas autorisé à utiliser cette application. Demandez à l'administrateur de vous ajouter à la liste ALLOWED_EMAILS.",
+    "Ce compte Google n'est pas encore autorisé. Demandez à la personne qui gère Caissette de vous ajouter, puis réessayez.",
   access_denied: "Vous avez annulé la connexion Google. Vous pouvez réessayer quand vous voulez.",
   auth_failed: "La connexion à Google a échoué. Réessayez dans un instant.",
   invalid_state: "La session de connexion a expiré. Réessayez.",
   missing_code: "La connexion à Google est incomplète. Réessayez.",
   no_refresh_token:
     "Google n'a pas accordé d'accès durable. Réessayez en acceptant toutes les autorisations demandées.",
-  profile: "Impossible de récupérer les informations de votre compte Google.",
+  profile: "Impossible de récupérer les informations de votre compte Google. Réessayez.",
 };
 
 const DEMO_ROWS = [
@@ -52,7 +52,7 @@ export function Landing({
         {configured ? (
           <a
             href="/api/auth/login"
-            className="rounded-full border border-stone-300 bg-white/80 px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:border-stone-400 hover:text-stone-900"
+            className="inline-flex min-h-10 items-center rounded-full border border-stone-300 bg-white/80 px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:border-stone-400 hover:text-stone-900"
           >
             Se connecter
           </a>
@@ -63,7 +63,7 @@ export function Landing({
         )}
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
+      <main id="contenu" className="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
         <div className="grid items-center gap-16 pb-16 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12 lg:pb-24 lg:pt-12">
           <section className="animate-in-up">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 text-xs font-medium text-emerald-800">
@@ -108,15 +108,31 @@ export function Landing({
                 <div className="flex flex-col items-start gap-3">
                   <a
                     href="/api/auth/login"
-                    className="group inline-flex items-center gap-3 rounded-xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-medium text-stone-800 shadow-sm shadow-stone-900/5 transition hover:-translate-y-0.5 hover:border-stone-400 hover:shadow-md"
+                    className="group inline-flex min-h-12 items-center gap-3 rounded-xl border border-stone-300 bg-white px-5 py-3.5 text-[15px] font-semibold text-stone-800 shadow-sm shadow-stone-900/5 transition hover:-translate-y-0.5 hover:border-stone-400 hover:shadow-md"
                   >
                     <GoogleIcon className="size-5" />
                     Continuer avec Google
-                    <ArrowRight className="size-4 text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-stone-600" />
+                    <ArrowRight className="size-4 text-stone-500 transition group-hover:translate-x-0.5 group-hover:text-stone-600" />
                   </a>
-                  <p className="flex items-center gap-1.5 text-xs text-stone-500">
+                  <p className="flex items-center gap-1.5 text-xs text-stone-600">
                     <Lock className="size-3.5" />
                     Connexion sécurisée. Vos données restent dans votre Drive.
+                  </p>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-600">
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="size-3.5 text-emerald-600" />
+                      Gratuit
+                    </span>
+                    <span aria-hidden="true" className="text-stone-300">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="size-3.5 text-emerald-600" />
+                      Sans installation
+                    </span>
+                    <span aria-hidden="true" className="text-stone-300">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="size-3.5 text-emerald-600" />
+                      Sans carte bancaire
+                    </span>
                   </p>
                 </div>
               )}
@@ -143,7 +159,7 @@ export function Landing({
             <div className="relative rotate-[-1.2deg] rounded-3xl border border-stone-200/90 bg-white/95 p-5 shadow-2xl shadow-stone-900/10 backdrop-blur sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-stone-400">
+                  <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
                     Novembre 2026
                   </p>
                   <p className="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
@@ -178,7 +194,7 @@ export function Landing({
                       <p className="truncate text-[13px] font-medium text-stone-800">
                         {row.merchant}
                       </p>
-                      <p className="text-[11px] text-stone-400">{row.category}</p>
+                      <p className="text-[11px] text-stone-500">{row.category}</p>
                     </div>
                     <span className="text-[13px] font-semibold tabular-nums text-stone-800">
                       {row.amount}
@@ -200,7 +216,66 @@ export function Landing({
           </section>
         </div>
 
-        <section className="grid gap-4 border-t border-stone-200/80 pt-12 sm:grid-cols-3">
+        <section
+          aria-labelledby="comment-ca-marche"
+          className="border-t border-stone-200/80 pt-12"
+        >
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+              Simple comme bonjour
+            </p>
+            <h2
+              id="comment-ca-marche"
+              className="mt-2 text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl"
+            >
+              Comment ça marche ?
+            </h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-stone-600">
+              Trois étapes, aucune compétence technique. La première fois prend
+              une minute, les suivantes quelques secondes.
+            </p>
+          </div>
+
+          <ol className="mt-7 grid gap-4 sm:grid-cols-3">
+            {[
+              {
+                icon: Camera,
+                title: "Photographiez le ticket",
+                text: "Prenez une photo bien nette, ou déposez le PDF envoyé par le magasin. Vous pouvez aussi choisir un fichier déjà présent dans Google Drive.",
+              },
+              {
+                icon: ScanLine,
+                title: "Vérifiez les informations",
+                text: "Caissette pré-remplit la date, le magasin, le montant et la catégorie. Corrigez d'un geste si quelque chose vous semble faux.",
+              },
+              {
+                icon: Table2,
+                title: "Tout est rangé",
+                text: "La dépense rejoint votre Google Sheet personnelle. Vos statistiques et votre budget se mettent à jour automatiquement.",
+              },
+            ].map(({ icon: Icon, title, text }, index) => (
+              <li
+                key={title}
+                className="relative rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm"
+              >
+                <span className="absolute right-4 top-4 text-3xl font-semibold tabular-nums text-stone-100">
+                  {index + 1}
+                </span>
+                <span className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+                  <Icon className="size-5" />
+                </span>
+                <h3 className="mt-4 text-[14px] font-semibold text-stone-900">
+                  {title}
+                </h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-stone-600">
+                  {text}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="mt-14 grid gap-4 border-t border-stone-200/80 pt-12 sm:grid-cols-3">
           {[
             {
               icon: Camera,
@@ -230,10 +305,64 @@ export function Landing({
             </article>
           ))}
         </section>
+
+        <section
+          aria-labelledby="questions"
+          className="mt-14 border-t border-stone-200/80 pt-12"
+        >
+          <h2
+            id="questions"
+            className="text-2xl font-semibold tracking-tight text-stone-900"
+          >
+            Questions fréquentes
+          </h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {[
+              {
+                question: "Est-ce que c'est vraiment gratuit ?",
+                answer:
+                  "Oui, entièrement. Pas d'abonnement, pas de carte bancaire, pas de publicité. Il faut simplement un compte Google pour stocker vos données.",
+              },
+              {
+                question: "Où sont mes tickets et mes dépenses ?",
+                answer:
+                  "Dans votre propre Google Drive : une feuille de calcul pour les dépenses, un dossier pour les photos et PDF. Aucune donnée n'est conservée sur le serveur de Caissette.",
+              },
+              {
+                question: "Faut-il installer une application ?",
+                answer:
+                  "Non. Caissette fonctionne dans votre navigateur, sur ordinateur comme sur téléphone. Vous pouvez créer un raccourci sur l'écran d'accueil si vous le souhaitez.",
+              },
+              {
+                question: "Et si le ticket est mal lu ?",
+                answer:
+                  "Rien n'est enregistré sans votre accord : une fenêtre de vérification s'ouvre et vous pouvez corriger chaque champ avant de valider.",
+              },
+            ].map(({ question, answer }) => (
+              <details
+                key={question}
+                className="group rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm open:bg-stone-50/60"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13.5px] font-medium text-stone-900">
+                  {question}
+                  <span
+                    aria-hidden="true"
+                    className="text-lg leading-none text-stone-500 transition group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="mt-2 pr-6 text-[12.5px] leading-relaxed text-stone-600">
+                  {answer}
+                </p>
+              </details>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer className="border-t border-stone-200/70 py-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 text-xs text-stone-400 sm:flex-row sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 text-xs text-stone-600 sm:flex-row sm:px-8">
           <p>Caissette · votre budget familial, sans prise de tête.</p>
           <div className="flex items-center gap-4">
             <a href="/confidentialite" className="transition hover:text-stone-600">

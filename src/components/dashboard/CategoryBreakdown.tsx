@@ -17,7 +17,7 @@ export function CategoryBreakdown({ expenses }: { expenses: Expense[] }) {
     <section className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-semibold text-stone-900">Répartition</h2>
-        <span className="text-[11px] text-stone-400">par catégorie</span>
+        <span className="text-[11px] text-stone-500">par catégorie</span>
       </div>
 
       {entries.length === 0 ? (
@@ -43,7 +43,7 @@ export function CategoryBreakdown({ expenses }: { expenses: Expense[] }) {
                         className={`size-2 shrink-0 rounded-full ${CATEGORY_STYLES[category].dot}`}
                       />
                       <span className="truncate">{category}</span>
-                      <span className="text-[10px] text-stone-400">{percent} %</span>
+                      <span className="text-[10.5px] text-stone-500">{percent} %</span>
                     </span>
                     <span className="shrink-0 font-medium tabular-nums text-stone-800">
                       {formatEuro(amount)}

@@ -5,6 +5,7 @@ import {
   Check,
   Loader2,
   Paperclip,
+  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -30,7 +31,7 @@ export type ExpenseDialogInitial = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
+  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
 
 function cents(value: number): string {
   return value.toFixed(2).replace(".", ",");
@@ -127,15 +128,15 @@ export function ExpenseDialog({
       }
       onClose={onClose}
       footer={
-        <div className="flex items-center justify-between gap-3">
-          <p className="hidden text-xs text-stone-400 sm:block">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="hidden text-xs text-stone-500 sm:block">
             Enregistré dans votre Google Sheet
           </p>
-          <div className="flex w-full justify-end gap-2 sm:w-auto">
+          <div className="flex w-full gap-2 sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+              className="min-h-11 flex-1 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 sm:flex-none"
             >
               Annuler
             </button>
@@ -143,20 +144,35 @@ export function ExpenseDialog({
               type="submit"
               form="expense-form"
               disabled={saving}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60 sm:flex-none"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60 sm:flex-none"
             >
               {saving ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Check className="size-4" strokeWidth={2.5} />
               )}
-              {mode === "create" ? "Enregistrer" : "Mettre à jour"}
+              {mode === "create" ? "Enregistrer le ticket" : "Mettre à jour"}
             </button>
           </div>
         </div>
       }
     >
       <form id="expense-form" onSubmit={handleSubmit} className="space-y-5">
+        {isScanned && warnings.length === 0 && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-[13px] font-medium text-emerald-900">
+                Ticket lu automatiquement
+              </p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-emerald-800">
+                Vérifiez surtout la date, le magasin et le montant, puis
+                enregistrez. Tout reste modifiable plus tard.
+              </p>
+            </div>
+          </div>
+        )}
+
         {warnings.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5">
             <p className="flex items-center gap-2 text-[13px] font-medium text-amber-900">
@@ -201,7 +217,7 @@ export function ExpenseDialog({
                 className={cn(inputClass, "pr-9 tabular-nums")}
                 required
               />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-400">
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
                 €
               </span>
             </div>
@@ -209,7 +225,7 @@ export function ExpenseDialog({
 
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
-              Magasin <span className="text-rose-500">*</span>
+              Magasin ou commerce <span className="text-rose-500">*</span>
             </span>
             <input
               type="text"
@@ -218,6 +234,7 @@ export function ExpenseDialog({
               placeholder="Carrefour Market"
               className={inputClass}
               maxLength={120}
+              data-autofocus
               required
             />
           </label>
@@ -255,7 +272,7 @@ export function ExpenseDialog({
 
           <label className="block">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
-              TVA <span className="font-normal text-stone-400">(facultatif)</span>
+              TVA <span className="font-normal text-stone-500">(facultatif)</span>
             </span>
             <div className="relative">
               <input
@@ -266,10 +283,14 @@ export function ExpenseDialog({
                 placeholder="0,00"
                 className={cn(inputClass, "pr-9 tabular-nums")}
               />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-400">
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
                 €
               </span>
             </div>
+            <span className="mt-1 block text-[11px] leading-relaxed text-stone-500">
+              Montant de TVA indiqué sur certains tickets. Laissez vide si vous
+              ne le connaissez pas.
+            </span>
           </label>
 
           <div className="hidden items-end pb-1 sm:flex">
@@ -288,7 +309,7 @@ export function ExpenseDialog({
 
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
-              Note <span className="font-normal text-stone-400">(facultatif)</span>
+              Note <span className="font-normal text-stone-500">(facultatif)</span>
             </span>
             <textarea
               value={note}

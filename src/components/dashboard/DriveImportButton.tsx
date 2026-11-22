@@ -211,7 +211,7 @@ export function DriveImportButton({
         )}
         {label}
       </button>
-      <p className="mt-1.5 text-center text-[10px] text-stone-400">
+      <p className="mt-1.5 text-center text-[10px] text-stone-500">
         PDF ou photos déjà présents dans votre Drive, jusqu'à {MAX_FILES} tickets.
       </p>
     </div>

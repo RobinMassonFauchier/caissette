@@ -118,21 +118,31 @@ Les deux sont accessibles depuis votre Google Drive.
 
 ## 4. Utilisation
 
-1. **Déposez un PDF ou une photo** dans la zone d'import (ou cliquez pour choisir un fichier).
-2. Quelques secondes plus tard, une fenêtre s'ouvre avec les champs pré-remplis. Les incertitudes sont signalées en jaune.
-3. Corrigez si besoin, choisissez la catégorie et enregistrez.
-4. La ligne est ajoutée au Google Sheet et le tableau de bord se met à jour.
+1. **Ajoutez un ticket** : bouton « Prendre une photo » sur téléphone, « Choisir un fichier » pour un PDF ou une photo, glisser-déposer sur ordinateur, ou « Importer depuis Google Drive ».
+2. Les photos sont **compressées automatiquement** dans le navigateur (2200 px max) pour accélérer l'envoi et la lecture.
+3. Quelques secondes plus tard, une fenêtre s'ouvre avec les champs pré-remplis. Les incertitudes sont signalées en jaune.
+4. Corrigez si besoin, choisissez la catégorie et enregistrez.
+5. La ligne est ajoutée au Google Sheet et le tableau de bord se met à jour.
 
 Vous pouvez aussi :
 
 - **Ajouter** une dépense manuellement (`Ajouter`) ;
-- **Modifier** une ligne (clic sur la ligne, crayon) ;
-- **Supprimer** une ligne (corbeille) ;
-- **Importer des tickets depuis Google Drive** avec le bouton dédié (PDF ou photos déjà présents dans le Drive, jusqu'à 5 à la fois) ; les données se rafraîchissent automatiquement après chaque modification et toutes les 2 minutes ;
+- **Modifier** une ligne (crayon ou bouton « Modifier » sur mobile) ;
+- **Supprimer** une ligne (corbeille ou bouton « Supprimer ») ;
+- **Importer des tickets depuis Google Drive** avec le bouton dédié (PDF ou photos déjà présents dans le Drive, jusqu'à 5 à la fois) ; les données se rafraîchissent après chaque modification, au retour sur l'onglet et toutes les 2 minutes ;
 - **Filtrer** par mois, par catégorie ou par recherche ;
 - **Consulter les statistiques** : évolution mensuelle, répartition par catégorie, moyens de paiement, jours de la semaine, top magasins, comparaison avec le mois précédent et budget ;
 - **Régler vos paramètres** : budget mensuel, catégorie par défaut, import Drive, compte Google ;
+- **Lire le guide** intégré (`/app/aide`) : démarrage en 3 étapes, signification des chiffres, installation sur téléphone et questions fréquentes ;
 - **Ouvrir le Sheet** à tout moment depuis l'en-tête.
+
+### Accessibilité et confort
+
+- Navigation mobile en bas d'écran avec libellés visibles (Dépenses, Statistiques, Paramètres, Aide).
+- Lien « Aller au contenu principal », focus clavier visible, fenêtres modales avec piège de focus et fermeture par `Échap`.
+- Textes agrandis sur les actions importantes, zones tactiles d'au moins 44 px, contraste conforme WCAG AA.
+- Respect de `prefers-reduced-motion`, zoom autorisé, champs à 16 px sur mobile pour éviter le zoom automatique de Safari.
+- Charte graphique verte assombrie pour garantir la lisibilité du texte blanc.
 
 ### Colonnes de la feuille
 

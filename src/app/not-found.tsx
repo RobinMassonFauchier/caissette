@@ -10,7 +10,10 @@ export default function NotFound() {
         </Link>
       </header>
 
-      <main className="mx-auto flex max-w-md flex-col items-center px-6 pb-24 pt-20 text-center">
+      <main
+        id="contenu"
+        className="mx-auto flex max-w-md flex-col items-center px-6 pb-24 pt-20 text-center"
+      >
         <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-700">
           Erreur 404
         </p>
