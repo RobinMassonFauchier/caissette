@@ -27,6 +27,16 @@ export type Workspace = {
   folderId: string;
 };
 
+/**
+ * Cache mémoire : évite deux appels Drive à chaque page.
+ * Le cache est perdu au redémarrage du serveur, ce qui n'est pas grave.
+ */
+const workspaceCache = new Map<
+  string,
+  { workspace: Workspace; expiresAt: number }
+>();
+const WORKSPACE_TTL = 15 * 60 * 1000;
+
 export type ExpenseInput = {
   date: string;
   merchant: string;
@@ -84,23 +94,38 @@ async function ensureFolder(drive: drive_v3.Drive): Promise<string> {
  * via l'API Drive à chaque démarrage de session.
  */
 export async function ensureWorkspace(auth: OAuth2Client): Promise<Workspace> {
-  const { sheets, drive } = clients(auth);
-  const folderId = await ensureFolder(drive);
+  const cacheKey = auth.credentials.refresh_token;
+  const cached = cacheKey ? workspaceCache.get(cacheKey) : undefined;
 
-  const found = await drive.files.list({
-    q: `name = '${escapeQuery(SPREADSHEET_TITLE)}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
-    fields: "files(id, webViewLink)",
-    pageSize: 1,
-    spaces: "drive",
-  });
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.workspace;
+  }
+
+  const { sheets, drive } = clients(auth);
+  const [folderId, found] = await Promise.all([
+    ensureFolder(drive),
+    drive.files.list({
+      q: `name = '${escapeQuery(SPREADSHEET_TITLE)}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+      fields: "files(id, webViewLink)",
+      pageSize: 1,
+      spaces: "drive",
+    }),
+  ]);
 
   const existing = found.data.files?.[0];
   if (existing?.id) {
-    return {
+    const workspace: Workspace = {
       spreadsheetId: existing.id,
       spreadsheetUrl: existing.webViewLink || spreadsheetUrl(existing.id),
       folderId,
     };
+    if (cacheKey) {
+      workspaceCache.set(cacheKey, {
+        workspace,
+        expiresAt: Date.now() + WORKSPACE_TTL,
+      });
+    }
+    return workspace;
   }
 
   const created = await sheets.spreadsheets.create({
@@ -262,11 +287,20 @@ export async function ensureWorkspace(auth: OAuth2Client): Promise<Workspace> {
     console.error("Déplacement de la feuille dans le dossier impossible :", error);
   }
 
-  return {
+  const workspace: Workspace = {
     spreadsheetId,
     spreadsheetUrl: created.data.spreadsheetUrl || spreadsheetUrl(spreadsheetId),
     folderId,
   };
+
+  if (cacheKey) {
+    workspaceCache.set(cacheKey, {
+      workspace,
+      expiresAt: Date.now() + WORKSPACE_TTL,
+    });
+  }
+
+  return workspace;
 }
 
 function cellToIsoDate(value: unknown): string {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Check,
   ExternalLink,
@@ -14,11 +13,10 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/app/AppHeader";
+import { useWorkspace } from "@/components/app/WorkspaceProvider";
 import { CategorySelect } from "@/components/ui/CategorySelect";
 import { parseAmountInput } from "@/lib/format";
-import type { AppSettings } from "@/lib/settings";
-import type { Category, SessionUser } from "@/lib/types";
+import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function Toggle({
@@ -56,20 +54,12 @@ function Toggle({
   );
 }
 
-export function SettingsView({
-  user,
-  settings,
-  sheetUrl,
-  folderUrl,
-  error,
-}: {
-  user: SessionUser;
-  settings: AppSettings;
-  sheetUrl: string;
-  folderUrl: string;
-  error: string | null;
-}) {
-  const router = useRouter();
+export function SettingsView() {
+  const { user, settings, sheetUrl, folderId, error, setSettings } =
+    useWorkspace();
+  const folderUrl = folderId
+    ? `https://drive.google.com/drive/folders/${folderId}`
+    : "";
   const [budget, setBudget] = useState(
     settings.monthlyBudget
       ? String(settings.monthlyBudget).replace(".", ",")
@@ -116,7 +106,7 @@ export function SettingsView({
       }
       setSaved(true);
       toast.success("Paramètres enregistrés");
-      router.refresh();
+      if (data.settings) setSettings(data.settings);
     } catch (saveError) {
       const message =
         saveError instanceof Error
@@ -137,9 +127,7 @@ export function SettingsView({
     .join("");
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <AppHeader user={user} sheetUrl={sheetUrl} active="settings" />
-
+    <>
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:py-10">
         <div className="mb-7">
           <p className="text-[13px] text-stone-500">Votre compte et vos préférences</p>
@@ -413,6 +401,6 @@ export function SettingsView({
           </aside>
         </div>
       </main>
-    </div>
+    </>
   );
 }

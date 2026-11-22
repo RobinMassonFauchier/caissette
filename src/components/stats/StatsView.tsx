@@ -18,7 +18,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { AppHeader } from "@/components/app/AppHeader";
+import { useWorkspace } from "@/components/app/WorkspaceProvider";
 import { CATEGORY_STYLES } from "@/lib/catalog";
 import {
   currentMonth,
@@ -26,8 +26,7 @@ import {
   monthLabel,
   parseISODate,
 } from "@/lib/format";
-import type { AppSettings } from "@/lib/settings";
-import type { Category, Expense, SessionUser } from "@/lib/types";
+import type { Category, Expense } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MONTH_LETTERS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -41,25 +40,9 @@ function yearOf(expense: Expense): number {
   return Number(expense.date.slice(0, 4));
 }
 
-export function StatsView({
-  user,
-  expenses,
-  settings,
-  sheetUrl,
-  error,
-}: {
-  user: SessionUser;
-  expenses: Expense[];
-  settings: AppSettings;
-  sheetUrl: string;
-  error: string | null;
-}) {
+export function StatsView() {
+  const { expenses, settings, error } = useWorkspace();
   const nowYear = new Date().getFullYear();
-  const years = useMemo(() => {
-    const set = new Set<number>(expenses.map(yearOf).filter((year) => Number.isFinite(year)));
-    set.add(nowYear);
-    return [...set].sort((a, b) => b - a);
-  }, [expenses, nowYear]);
   const [year, setYear] = useState(nowYear);
 
   const yearExpenses = useMemo(
@@ -194,9 +177,7 @@ export function StatsView({
       : 0;
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <AppHeader user={user} sheetUrl={sheetUrl} active="stats" />
-
+    <>
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:py-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -662,7 +643,7 @@ export function StatsView({
           <p>Statistiques calculées à partir de votre Google Sheet.</p>
         </footer>
       </main>
-    </div>
+    </>
   );
 }
 

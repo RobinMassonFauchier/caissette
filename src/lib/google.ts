@@ -30,16 +30,35 @@ export function createOAuthClient(): OAuth2Client {
 
 /**
  * Construit un client authentifié à partir du refresh token stocké en session.
- * Le jeton d'accès est rafraîchi automatiquement en mémoire par google-auth-library.
+ * Le jeton d'accès est mis en cache en mémoire jusqu'à son expiration pour
+ * éviter un appel réseau à chaque page.
  */
+type CachedAccessToken = { token: string; expiresAt: number };
+const accessTokenCache = new Map<string, CachedAccessToken>();
+
 export async function getAuthClient(refreshToken: string): Promise<OAuth2Client> {
   const client = createOAuthClient();
+  const cached = accessTokenCache.get(refreshToken);
+
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    client.setCredentials({
+      refresh_token: refreshToken,
+      access_token: cached.token,
+      expiry_date: cached.expiresAt,
+    });
+    return client;
+  }
+
   client.setCredentials({ refresh_token: refreshToken });
   const { token } = await client.getAccessToken();
 
   if (!token) {
     throw new Error("Autorisation Google expirée. Reconnectez-vous.");
   }
+
+  const expiresAt =
+    client.credentials.expiry_date ?? Date.now() + 50 * 60 * 1000;
+  accessTokenCache.set(refreshToken, { token, expiresAt });
 
   return client;
 }

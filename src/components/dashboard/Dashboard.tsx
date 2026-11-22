@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Calculator,
   ReceiptText,
@@ -14,7 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/app/AppHeader";
+import { useWorkspace } from "@/components/app/WorkspaceProvider";
 import { CategoryBreakdown } from "@/components/dashboard/CategoryBreakdown";
 import {
   ExpenseDialog,
@@ -26,29 +25,11 @@ import { UploadCard } from "@/components/dashboard/UploadCard";
 import { DriveImportButton } from "@/components/dashboard/DriveImportButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { currentMonth, formatEuro, monthLabel, todayISO } from "@/lib/format";
-import type { AppSettings } from "@/lib/settings";
-import type {
-  Expense,
-  ExpensePayload,
-  ExtractedReceipt,
-  SessionUser,
-} from "@/lib/types";
+import type { Expense, ExpensePayload, ExtractedReceipt } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export default function Dashboard({
-  user,
-  expenses,
-  sheetUrl,
-  settings,
-  error,
-}: {
-  user: SessionUser;
-  expenses: Expense[];
-  sheetUrl: string;
-  settings: AppSettings;
-  error: string | null;
-}) {
-  const router = useRouter();
+export default function Dashboard() {
+  const { user, expenses, settings, error, refresh } = useWorkspace();
   const [month, setMonth] = useState(currentMonth());
   const [creating, setCreating] = useState<ExpenseDialogInitial | null>(null);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -109,7 +90,11 @@ export default function Dashboard({
     });
     setMonth(payload.date.slice(0, 7));
     setCreating(null);
-    router.refresh();
+    try {
+      await refresh();
+    } catch {
+      toast.error("Ticket enregistré, mais le tableau n'a pas pu se rafraîchir.");
+    }
   }
 
   async function updateExpense(payload: ExpensePayload) {
@@ -129,7 +114,11 @@ export default function Dashboard({
     toast.success("Dépense mise à jour");
     setMonth(payload.date.slice(0, 7));
     setEditing(null);
-    router.refresh();
+    try {
+      await refresh();
+    } catch {
+      toast.error("Dépense mise à jour, mais le tableau n'a pas pu se rafraîchir.");
+    }
   }
 
   async function confirmDelete() {
@@ -148,7 +137,11 @@ export default function Dashboard({
 
       toast.success("Dépense supprimée");
       setDeleting(null);
-      router.refresh();
+      try {
+        await refresh();
+      } catch {
+        toast.error("Dépense supprimée, mais le tableau n'a pas pu se rafraîchir.");
+      }
     } catch (deleteError) {
       toast.error(
         deleteError instanceof Error ? deleteError.message : "Suppression impossible.",
@@ -159,9 +152,7 @@ export default function Dashboard({
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <AppHeader user={user} sheetUrl={sheetUrl} active="expenses" />
-
+    <>
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:py-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -336,7 +327,7 @@ export default function Dashboard({
           onClose={() => setDeleting(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
