@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/app/WorkspaceProvider";
 import { CategorySelect } from "@/components/ui/CategorySelect";
+import { fieldClass } from "@/components/ui/field-styles";
 import { parseAmountInput } from "@/lib/format";
 import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -212,7 +213,7 @@ export function SettingsView() {
                         setSaved(false);
                       }}
                       placeholder="Par exemple 900,00"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 pr-9 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      className={cn(fieldClass, "pr-9")}
                     />
                     <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
                       €
@@ -236,7 +237,6 @@ export function SettingsView() {
                       }
                     }}
                     ariaLabel="Catégorie par défaut"
-                    className="!py-2"
                   />
                   <span className="mt-1 block text-[11px] text-stone-500">
                     Proposition lors d'un ajout manuel.

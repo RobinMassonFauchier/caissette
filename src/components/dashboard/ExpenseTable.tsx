@@ -13,6 +13,7 @@ import { CATEGORY_STYLES } from "@/lib/catalog";
 import { formatDateShort, formatEuro } from "@/lib/format";
 import type { Category, Expense } from "@/lib/types";
 import { CategorySelect } from "@/components/ui/CategorySelect";
+import { fieldCompactClass } from "@/components/ui/field-styles";
 import { cn } from "@/lib/utils";
 
 export function ExpenseTable({
@@ -76,7 +77,10 @@ export function ExpenseTable({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Rechercher un magasin, une note…"
-              className="w-full rounded-lg border border-stone-200 bg-stone-50/60 py-2 pl-8 pr-3 text-[13px] text-stone-800 outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
+              className={cn(
+                fieldCompactClass,
+                "bg-stone-50/60 pl-8 focus:bg-white",
+              )}
             />
           </div>
 

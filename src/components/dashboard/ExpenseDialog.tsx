@@ -2,19 +2,29 @@
 
 import { useState } from "react";
 import {
+  ArrowRightLeft,
+  Banknote,
   Check,
+  CreditCard,
+  Landmark,
   Loader2,
   Paperclip,
   Sparkles,
   TriangleAlert,
+  Wallet,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "@/components/ui/CategorySelect";
 import {
+  OptionSelect,
+  type SelectOption,
+} from "@/components/ui/OptionSelect";
+import { fieldClass } from "@/components/ui/field-styles";
+import {
   PAYMENT_METHODS,
 } from "@/lib/catalog";
 import { parseAmountInput, todayISO } from "@/lib/format";
-import type { Category, ExpensePayload, PaymentMethod } from "@/lib/types";
+import type { Category, ExpensePayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type ExpenseDialogInitial = {
@@ -30,8 +40,33 @@ export type ExpenseDialogInitial = {
   rawText?: string;
 };
 
-const inputClass =
-  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20";
+const PAYMENT_STYLES: Record<string, { icon: typeof Wallet; chip: string }> = {
+  "Carte bancaire": {
+    icon: CreditCard,
+    chip: "bg-sky-50 text-sky-700 ring-sky-600/15",
+  },
+  Espèces: {
+    icon: Banknote,
+    chip: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
+  },
+  Chèque: {
+    icon: Landmark,
+    chip: "bg-amber-50 text-amber-700 ring-amber-600/15",
+  },
+  Virement: {
+    icon: ArrowRightLeft,
+    chip: "bg-violet-50 text-violet-700 ring-violet-600/15",
+  },
+  Autre: {
+    icon: Wallet,
+    chip: "bg-stone-100 text-stone-600 ring-stone-600/15",
+  },
+};
+
+const DEFAULT_PAYMENT_STYLE = {
+  icon: Wallet,
+  chip: "bg-stone-100 text-stone-600 ring-stone-600/15",
+};
 
 function cents(value: number): string {
   return value.toFixed(2).replace(".", ",");
@@ -62,9 +97,15 @@ export function ExpenseDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const paymentOptions = (PAYMENT_METHODS as string[]).includes(payment)
+  const paymentValues = (PAYMENT_METHODS as string[]).includes(payment)
     ? (PAYMENT_METHODS as string[])
     : [payment, ...(PAYMENT_METHODS as string[])];
+
+  const paymentOptions: SelectOption<string>[] = paymentValues.map((option) => ({
+    value: option,
+    label: option,
+    ...(PAYMENT_STYLES[option] ?? DEFAULT_PAYMENT_STYLE),
+  }));
 
   const warnings = initial.warnings ?? [];
   const isScanned = Boolean(initial.rawText);
@@ -198,7 +239,7 @@ export function ExpenseDialog({
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className={inputClass}
+              className={fieldClass}
               required
             />
           </label>
@@ -214,7 +255,7 @@ export function ExpenseDialog({
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 placeholder="0,00"
-                className={cn(inputClass, "pr-9 tabular-nums")}
+                className={cn(fieldClass, "pr-9 tabular-nums")}
                 required
               />
               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
@@ -232,14 +273,14 @@ export function ExpenseDialog({
               value={merchant}
               onChange={(event) => setMerchant(event.target.value)}
               placeholder="Carrefour Market"
-              className={inputClass}
+              className={fieldClass}
               maxLength={120}
               data-autofocus
               required
             />
           </label>
 
-          <label className="block">
+          <div className="block">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
               Catégorie
             </span>
@@ -249,26 +290,20 @@ export function ExpenseDialog({
                 if (value !== "all") setCategory(value);
               }}
               ariaLabel="Catégorie de la dépense"
-              className="!py-2"
             />
-          </label>
+          </div>
 
-          <label className="block">
+          <div className="block">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
               Moyen de paiement
             </span>
-            <select
+            <OptionSelect
               value={payment}
-              onChange={(event) => setPayment(event.target.value)}
-              className={inputClass}
-            >
-              {paymentOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setPayment}
+              options={paymentOptions}
+              ariaLabel="Moyen de paiement"
+            />
+          </div>
 
           <label className="block">
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
@@ -281,7 +316,7 @@ export function ExpenseDialog({
                 value={tva}
                 onChange={(event) => setTva(event.target.value)}
                 placeholder="0,00"
-                className={cn(inputClass, "pr-9 tabular-nums")}
+                className={cn(fieldClass, "pr-9 tabular-nums")}
               />
               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
                 €
@@ -317,7 +352,7 @@ export function ExpenseDialog({
               rows={2}
               maxLength={500}
               placeholder="Courses de la semaine, essence, cadeau…"
-              className={cn(inputClass, "resize-none")}
+              className={cn(fieldClass, "resize-none")}
             />
           </label>
         </div>

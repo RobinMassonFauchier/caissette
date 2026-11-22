@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "@/components/ui/CategorySelect";
+import { fieldCompactClass } from "@/components/ui/field-styles";
 import { formatEuro, parseAmountInput, todayISO } from "@/lib/format";
 import type { Category, DriveImportResult, ExpensePayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -259,7 +260,7 @@ export function BatchImportDialog({
                     onChange={(event) =>
                       updateRow(row.id, { date: event.target.value })
                     }
-                    className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[12px] text-stone-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                    className={fieldCompactClass}
                     aria-label="Date"
                   />
                   <input
@@ -269,7 +270,7 @@ export function BatchImportDialog({
                       updateRow(row.id, { merchant: event.target.value })
                     }
                     placeholder="Magasin"
-                    className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[12px] text-stone-800 outline-none placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                    className={fieldCompactClass}
                     aria-label="Magasin"
                   />
                   <div className="relative">
@@ -281,7 +282,7 @@ export function BatchImportDialog({
                         updateRow(row.id, { amount: event.target.value })
                       }
                       placeholder="0,00"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 pr-6 text-[12px] tabular-nums text-stone-800 outline-none placeholder:text-stone-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                      className={cn(fieldCompactClass, "pr-6 tabular-nums")}
                       aria-label="Montant"
                     />
                     <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[11px] text-stone-500">
@@ -294,7 +295,7 @@ export function BatchImportDialog({
                       if (value !== "all") updateRow(row.id, { category: value });
                     }}
                     ariaLabel="Catégorie"
-                    className="!py-1.5 !text-[12px]"
+                    className="min-h-9 text-[12.5px]"
                   />
                 </div>
 

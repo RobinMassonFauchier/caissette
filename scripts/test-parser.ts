@@ -9,6 +9,7 @@ type Case = {
     category: string;
     amount: number;
     payment: string;
+    tva: number | null;
   }>;
 };
 
@@ -28,7 +29,87 @@ TOTAL TTC 42,18
 TVA 20,00% 7,03
 CARTE BANCAIRE 42,18
 MERCI DE VOTRE VISITE`,
-    expect: { date: "2026-11-20", merchant: "Carrefour", category: "Alimentation", amount: 42.18, payment: "Carte bancaire" },
+    expect: { date: "2026-11-20", merchant: "Carrefour Market", category: "Alimentation", amount: 42.18, payment: "Carte bancaire", tva: 7.03 },
+  },
+  {
+    name: "PDF sur une seule ligne",
+    text: `CARREFOUR MARKET 12 RUE DE LA PAIX 75002 PARIS TEL 01 23 45 67 89 DATE 20/11/2026 TOTAL TTC 42,18 TVA 20,00% 7,03 CARTE BANCAIRE 42,18 MERCI DE VOTRE VISITE`,
+    expect: { date: "2026-11-20", merchant: "Carrefour Market", amount: 42.18, tva: 7.03, payment: "Carte bancaire" },
+  },
+  {
+    name: "TVA multi-taux avec total explicite",
+    text: `CARREFOUR MARKET
+12 RUE DE LA PAIX
+75002 PARIS
+TVA 5,50% 0,52
+TVA 20,00% 7,03
+TOTAL TVA 7,55
+TOTAL TTC 42,18
+CARTE BANCAIRE 42,18`,
+    expect: { merchant: "Carrefour Market", amount: 42.18, tva: 7.55 },
+  },
+  {
+    name: "TVA multi-taux sans ligne de total",
+    text: `LIDL
+Date 21/11/2026
+TVA 5,50% 0,52
+TVA 20,00% 7,03
+TOTAL 42,18
+CB 42,18`,
+    expect: { merchant: "Lidl", amount: 42.18, tva: 7.55 },
+  },
+  {
+    name: "Taux de TVA sans pourcentage ne doit pas être pris pour un montant",
+    text: `LIDL
+Date 22/11/2026
+TVA 20,00
+TOTAL 42,18
+CB`,
+    expect: { merchant: "Lidl", amount: 42.18, tva: null },
+  },
+  {
+    name: "TVA sans signe pourcentage mais avec montant",
+    text: `LIDL
+Date 22/11/2026
+TVA 20,00 7,03
+TOTAL 42,18
+CB`,
+    expect: { merchant: "Lidl", amount: 42.18, tva: 7.03 },
+  },
+  {
+    name: "TVA sur une seule ligne",
+    text: `LE PETIT MARCHE
+Date 22/11/2026
+TOTAL 18,90
+DONT TVA 3,15
+CB`,
+    expect: { merchant: "Le Petit Marche", amount: 18.9, tva: 3.15 },
+  },
+  {
+    name: "Un mot de marque dans une ligne produit ne prend pas le dessus",
+    text: `LE PETIT MARCHE
+Date 09/11/2026
+ACTION PROMO 2,00
+TOTAL 18,90`,
+    expect: { merchant: "Le Petit Marche", amount: 18.9 },
+  },
+  {
+    name: "Magasin précédé d'une adresse",
+    text: `12 RUE DE LA PAIX
+75002 PARIS
+TEL 01 23 45 67 89
+LE PETIT MARCHE
+Date 09/11/2026
+TOTAL 18,90`,
+    expect: { merchant: "Le Petit Marche", amount: 18.9, category: "Alimentation" },
+  },
+  {
+    name: "Raison sociale à supprimer",
+    text: `BOULANGERIE MARTIN SARL
+12 AVENUE DE LA GARE
+Date 10/11/2026
+TOTAL 8,40`,
+    expect: { merchant: "Boulangerie Martin", amount: 8.4, category: "Restaurants" },
   },
   {
     name: "SNCF texte",

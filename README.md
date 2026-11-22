@@ -155,6 +155,8 @@ Les catégories proposées : Alimentation, Restaurants, Transport, Carburant, Sa
 
 - PDF **textuels** (Carrefour, Leclerc, Amazon, SNCF, factures en ligne…) : extraction directe, très fiable.
 - **Photos** JPG/PNG/WebP/HEIC : OCR local, puis détection de la date, du total, de la TVA, du moyen de paiement et du magasin (liste de marques françaises + heuristiques).
+- **TVA** : utilise le total explicite (`TOTAL TVA`, `DONT TVA`) ou additionne le tableau des taux (5,5 %, 10 %, 20 %) ; un contrôle de cohérence évite de confondre un taux avec un montant.
+- **Magasin** : enseignes connues en priorité, sinon nettoyage des adresses, mentions légales (SARL, SAS…), numéros de téléphone et slogans.
 - Les **PDF scannés** (image dans un PDF) ne sont pas OCRisés : l'application vous invite à envoyer une photo ou à saisir la dépense à la main.
 - Un ticket mal lu reste toujours modifiable avant enregistrement.
 
