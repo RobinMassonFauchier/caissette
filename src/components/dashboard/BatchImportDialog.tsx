@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import {
+  BadgePercent,
   Check,
   ExternalLink,
   Loader2,
   Paperclip,
+  ReceiptText,
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +15,12 @@ import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "@/components/ui/CategorySelect";
 import { fieldCompactClass } from "@/components/ui/field-styles";
 import { formatEuro, parseAmountInput, todayISO } from "@/lib/format";
-import type { Category, DriveImportResult, ExpensePayload } from "@/lib/types";
+import type {
+  Category,
+  DriveImportResult,
+  ExpensePayload,
+  ReceiptItem,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Row = {
@@ -23,10 +30,13 @@ type Row = {
   date: string;
   merchant: string;
   amount: string;
-  tva: string;
   category: Category;
   payment: string;
   receiptUrl: string;
+  items: ReceiptItem[];
+  ticketTva: number | null;
+  ticketSavings: number;
+  savings: number;
   warnings: string[];
 };
 
@@ -51,10 +61,13 @@ export function BatchImportDialog({
       date: result.date || todayISO(),
       merchant: result.merchant,
       amount: result.amount !== null ? cents(result.amount) : "",
-      tva: result.tva !== null ? cents(result.tva) : "",
       category: result.category,
       payment: result.payment,
       receiptUrl: result.fileUrl,
+      items: result.items ?? [],
+      ticketTva: result.tva,
+      ticketSavings: result.ticketSavings ?? 0,
+      savings: result.savings ?? 0,
       warnings: result.warnings,
     })),
   );
@@ -107,21 +120,18 @@ export function BatchImportDialog({
         setError(`Ticket « ${row.fileName} » : montant invalide.`);
         return;
       }
-      const tva = row.tva.trim() ? parseAmountInput(row.tva) : null;
-      if (tva !== null && (tva < 0 || tva > amount)) {
-        setError(`Ticket « ${row.fileName} » : TVA invalide.`);
-        return;
-      }
 
       payloads.push({
         date: row.date,
         merchant: row.merchant.trim(),
         category: row.category,
         amount: Math.round(amount * 100) / 100,
-        tva: tva === null ? null : Math.round(tva * 100) / 100,
         payment: row.payment,
         note: "",
         receiptUrl: row.receiptUrl,
+        items: row.items,
+        ticketTva: row.ticketTva,
+        ticketSavings: row.ticketSavings,
       });
     }
 
@@ -252,6 +262,24 @@ export function BatchImportDialog({
                     </a>
                   )}
                 </div>
+
+                {(row.items.length > 0 || row.savings > 0) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-stone-500">
+                    {row.items.length > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <ReceiptText className="size-2.5" />
+                        {row.items.length} article
+                        {row.items.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {row.savings > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">
+                        <BadgePercent className="size-2.5" />
+                        {formatEuro(row.savings)} économisés
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-2 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_105px_150px]">
                   <input

@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -27,9 +29,15 @@ type Position = {
 };
 
 /**
- * Menu déroulant maison, partagé par les catégories et les moyens de paiement.
- * Il reprend exactement le style des champs du site et reste utilisable au
- * clavier (flèches, Entrée, Échap).
+ * Menu déroulant maison, partagé par les catégories, les moyens de paiement et
+ * les filtres.
+ *
+ * Correctifs V2 :
+ * - position recalculée après l'animation d'ouverture de la modale (le menu ne
+ *   « saute » plus à côté du champ) ;
+ * - sélection clavier fiable quand la liste change (index toujours borné) ;
+ * - fermeture par Échap même si le focus a bougé, et au clic extérieur ;
+ * - portail au-dessus de la modale, y compris sur mobile.
  */
 export function OptionSelect<T extends string>({
   value,
@@ -56,30 +64,29 @@ export function OptionSelect<T extends string>({
   const selected =
     options.find((option) => option.value === value) ?? options[0];
 
-  if (!selected) return null;
-
-  const SelectedIcon = selected.icon;
-
-  function computePosition(): Position | null {
+  const computePosition = useCallback((): Position | null => {
     const button = buttonRef.current;
     if (!button) return null;
 
     const rect = button.getBoundingClientRect();
-    const width = Math.max(rect.width, 230);
+    const width = Math.min(
+      Math.max(rect.width, 230),
+      Math.max(230, window.innerWidth - 16),
+    );
     const left = Math.min(
       Math.max(8, rect.left),
       Math.max(8, window.innerWidth - width - 8),
     );
     const spaceBelow = window.innerHeight - rect.bottom - 12;
     const spaceAbove = rect.top - 12;
-    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
 
     if (openUp) {
       return {
         left,
         width,
-        bottom: window.innerHeight - rect.top + 6,
-        maxHeight: Math.min(320, spaceAbove),
+        bottom: Math.max(8, window.innerHeight - rect.top + 6),
+        maxHeight: Math.max(120, Math.min(340, spaceAbove)),
       };
     }
 
@@ -87,11 +94,12 @@ export function OptionSelect<T extends string>({
       left,
       width,
       top: rect.bottom + 6,
-      maxHeight: Math.min(320, spaceBelow),
+      maxHeight: Math.max(120, Math.min(340, spaceBelow)),
     };
-  }
+  }, []);
 
-  function openMenu() {
+  const openMenu = useCallback(() => {
+    if (options.length === 0) return;
     const next = computePosition();
     if (!next) return;
     const selectedIndex = options.findIndex(
@@ -100,20 +108,46 @@ export function OptionSelect<T extends string>({
     setPosition(next);
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
     setOpen(true);
-  }
+  }, [computePosition, options, value]);
 
-  function closeMenu(focusButton = false) {
+  const closeMenu = useCallback((focusButton = false) => {
     setOpen(false);
     if (focusButton) buttonRef.current?.focus();
-  }
+  }, []);
 
   function choose(option: SelectOption<T>) {
     onChange(option.value);
     closeMenu(true);
   }
 
+  // L'index actif peut devenir invalide si la liste change en cours de route.
+  useEffect(() => {
+    setActiveIndex((index) =>
+      options.length === 0 ? 0 : Math.min(index, options.length - 1),
+    );
+  }, [options.length]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const next = computePosition();
+    if (next) setPosition(next);
+  }, [open, computePosition]);
+
   useEffect(() => {
     if (!open) return;
+
+    // La modale s'ouvre avec une petite animation : on suit le champ pendant
+    // quelques images pour que le menu reste aligné.
+    let frame = 0;
+    const started = performance.now();
+    const follow = () => {
+      const next = computePosition();
+      if (next) setPosition(next);
+      if (performance.now() - started < 320) {
+        frame = requestAnimationFrame(follow);
+      }
+    };
+    frame = requestAnimationFrame(follow);
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -126,22 +160,34 @@ export function OptionSelect<T extends string>({
       closeMenu();
     };
 
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMenu(true);
+      }
+    };
+
     const onReposition = () => {
       const next = computePosition();
       if (next) setPosition(next);
     };
 
     document.addEventListener("pointerdown", onPointerDown);
+    // En capture : Échap ferme d'abord le menu, pas la modale qui le contient.
+    document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("resize", onReposition);
     window.addEventListener("scroll", onReposition, true);
-    menuRef.current?.focus();
+    menuRef.current?.focus({ preventScroll: true });
 
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
-  }, [open]);
+  }, [closeMenu, computePosition, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -157,15 +203,21 @@ export function OptionSelect<T extends string>({
       closeMenu(true);
       return;
     }
+    if (event.key === "Tab") {
+      closeMenu();
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((index) => (index + 1) % options.length);
+      setActiveIndex((index) => (index + 1) % Math.max(1, options.length));
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setActiveIndex(
-        (index) => (index - 1 + options.length) % options.length,
+        (index) =>
+          (index - 1 + Math.max(1, options.length)) %
+          Math.max(1, options.length),
       );
       return;
     }
@@ -177,15 +229,19 @@ export function OptionSelect<T extends string>({
   }
 
   function onButtonKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (
-      event.key === "ArrowDown" ||
-      event.key === "Enter" ||
-      event.key === " "
-    ) {
+    if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      event.preventDefault();
+      openMenu();
+    }
+    if (!open && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       openMenu();
     }
   }
+
+  if (!selected) return null;
+
+  const SelectedIcon = selected.icon;
 
   const triggerClass =
     variant === "form"
@@ -248,7 +304,7 @@ export function OptionSelect<T extends string>({
               bottom: position.bottom,
               maxHeight: position.maxHeight,
             }}
-            className="animate-in-up z-[80] overflow-y-auto rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl shadow-stone-900/10 outline-none"
+            className="animate-in-up z-[100] overflow-y-auto overscroll-contain rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl shadow-stone-900/10 outline-none"
           >
             {options.map((option, index) => {
               const Icon = option.icon;

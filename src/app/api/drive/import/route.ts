@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { getSession } from "@/lib/session";
 import { getAuthClient } from "@/lib/google";
-import { extractPdfText, preprocessImage, recognizeImage } from "@/lib/ocr";
+import {
+  extractPdfContent,
+  preprocessImage,
+  recognizeImageWithStyle,
+} from "@/lib/ocr";
 import { parseReceipt } from "@/lib/parse-receipt";
+import { ensureWorkspace } from "@/lib/sheet";
+import { readSettings } from "@/lib/settings";
+import type { Category } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,10 +80,13 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(media.data as ArrayBuffer);
     let text = "";
+    let boldLines: string[] = [];
     let source: "pdf" | "ocr" = "pdf";
 
     if (isPdf) {
-      text = await extractPdfText(buffer);
+      const content = await extractPdfContent(buffer);
+      text = content.text;
+      boldLines = content.boldLines;
       if (text.replace(/\s/g, "").length < 40) {
         return NextResponse.json(
           {
@@ -89,7 +99,9 @@ export async function POST(request: Request) {
     } else {
       source = "ocr";
       const preprocessed = await preprocessImage(buffer);
-      text = await recognizeImage(preprocessed);
+      const content = await recognizeImageWithStyle(preprocessed);
+      text = content.text;
+      boldLines = content.boldLines;
       if (text.replace(/\s/g, "").length < 10) {
         return NextResponse.json(
           {
@@ -101,7 +113,16 @@ export async function POST(request: Request) {
       }
     }
 
-    const parsed = parseReceipt(text);
+    let defaultCategory: Category = "Divers";
+    try {
+      const workspace = await ensureWorkspace(auth);
+      const settings = await readSettings(auth, workspace.folderId);
+      defaultCategory = settings.defaultCategory;
+    } catch (settingsError) {
+      console.error("Lecture des préférences impossible :", settingsError);
+    }
+
+    const parsed = parseReceipt(text, { defaultCategory, boldLines });
     const fileUrl =
       meta.data.webViewLink ||
       `https://drive.google.com/file/d/${fileId}/view`;

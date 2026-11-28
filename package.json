@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "test:parser": "tsx scripts/test-parser.ts",
+    "test:expenses": "tsx scripts/test-expenses.ts",
     "test:pdf": "tsx scripts/test-pdf.ts",
     "test:ocr": "tsx scripts/test-ocr.ts"
   },

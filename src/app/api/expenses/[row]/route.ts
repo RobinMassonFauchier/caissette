@@ -4,9 +4,11 @@ import { getAuthClient } from "@/lib/google";
 import {
   deleteExpense,
   ensureWorkspace,
+  SheetConflictError,
+  SheetNotFoundError,
   updateExpense,
 } from "@/lib/sheet";
-import { parseExpenseInput } from "@/lib/validation";
+import { parseExpensePatch } from "@/lib/validation";
 import { describeGoogleError } from "@/lib/google-errors";
 
 export const runtime = "nodejs";
@@ -39,7 +41,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Données invalides." }, { status: 400 });
   }
 
-  const parsed = parseExpenseInput(payload);
+  const parsed = parseExpensePatch(payload);
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
@@ -47,9 +49,32 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const auth = await getAuthClient(session.refreshToken);
     const workspace = await ensureWorkspace(auth);
-    await updateExpense(auth, workspace.spreadsheetId, row, parsed.value);
-    return NextResponse.json({ ok: true });
+    const updated = await updateExpense(
+      auth,
+      workspace.spreadsheetId,
+      row,
+      parsed.value.patch,
+      {
+        expectedUpdatedAt: parsed.value.expectedUpdatedAt,
+        expectedOriginal: parsed.value.expectedOriginal,
+        force: parsed.value.force,
+      },
+    );
+    return NextResponse.json({ ok: true, expense: updated });
   } catch (error) {
+    if (error instanceof SheetConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "conflict",
+          current: error.current,
+        },
+        { status: 409 },
+      );
+    }
+    if (error instanceof SheetNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     console.error("Modification de la dépense impossible :", error);
     return NextResponse.json(
       { error: describeGoogleError(error) },

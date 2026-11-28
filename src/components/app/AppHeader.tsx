@@ -11,7 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import type { SessionUser } from "@/lib/types";
+import type { SessionUser, UserProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -40,15 +40,18 @@ function getActive(pathname: string) {
 
 export function AppHeader({
   user,
+  profile,
   sheetUrl,
 }: {
   user: SessionUser;
+  profile: UserProfile;
   sheetUrl: string;
 }) {
   const pathname = usePathname();
   const active = getActive(pathname);
 
-  const initials = (user.name || user.email || "?")
+  const displayName = profile.displayName || user.name;
+  const initials = (displayName || user.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -102,9 +105,9 @@ export function AppHeader({
             )}
 
             <div className="hidden items-center gap-2 border-l border-stone-200 pl-3 lg:flex">
-              {user.picture ? (
+              {profile.picture || user.picture ? (
                 <img
-                  src={user.picture}
+                  src={profile.picture || user.picture}
                   alt=""
                   referrerPolicy="no-referrer"
                   className="size-8 rounded-full object-cover ring-2 ring-white"
@@ -116,7 +119,7 @@ export function AppHeader({
               )}
               <div className="max-w-[140px]">
                 <p className="truncate text-[12px] font-medium leading-tight text-stone-800">
-                  {user.name}
+                  {displayName}
                 </p>
                 <p className="truncate text-[10px] leading-tight text-stone-500">
                   {user.email}

@@ -1,13 +1,17 @@
 # Caissette
 
-Gestionnaire de dépenses familial : on envoie un ticket de caisse (PDF du magasin ou photo), l'application en extrait la date, le montant, le magasin et la catégorie, puis complète automatiquement **votre propre Google Sheet**. Tout est modifiable à la main.
+Gestionnaire de dépenses familial : on envoie un ticket de caisse (PDF du magasin ou photo), l'application en extrait la date, le montant, le magasin, le détail des articles, les remises et la catégorie, puis complète automatiquement **votre propre Google Sheet**. Tout est modifiable à la main.
 
 - **Lecture locale** : les PDF sont lus directement, les photos passent par Tesseract (OCR) exécuté sur votre machine.
+- **Détail par article** : nom, quantité, prix unitaire, montant, TVA et catégorie de chaque ligne, avec repérage des articles mis en avant (gras) sur le ticket.
+- **Économies** : les promos, remises et coupons sont cumulés et visibles dans le tableau de bord et les statistiques.
 - **Données chez vous** : la feuille de calcul et les justificatifs sont créés dans **votre** Google Drive. Le serveur ne stocke ni base de données ni fichiers.
-- **Connexion Google** : chaque membre de la famille se connecte avec son compte et obtient sa propre feuille.
-- **Interface** : tableau de bord responsive, graphique par catégorie, recherche, édition et suppression en un clic.
+- **Connexion Google** : chaque membre de la famille se connecte avec son compte, obtient sa propre feuille et son propre profil.
+- **Interface** : tableau de bord responsive, filtres avancés (paiement, magasin, prix, économies), graphiques, édition et suppression en un clic.
 
 ![Aperçu du tableau de bord](docs/preview-desktop.png)
+
+> 📘 **Description fonctionnelle complète et maintenue à jour : [`docs/DESCRIPTION-OUTIL.md`](docs/DESCRIPTION-OUTIL.md)** — elle est mise à jour à chaque évolution de l'outil.
 
 ---
 
@@ -108,7 +112,7 @@ npm run dev
 Ouvrez [http://localhost:3000](http://localhost:3000) et connectez-vous avec Google. Au premier chargement du tableau de bord, Caissette crée automatiquement :
 
 - le classeur **« Dépenses — Caissette »** ;
-- le dossier **« Tickets de caisse — Caissette »** qui archive les originaux.
+- le dossier **« Tickets de caisse — Caissette »** qui archive les originaux, les paramètres et le profil privé.
 
 Les deux sont accessibles depuis votre Google Drive.
 
@@ -120,19 +124,19 @@ Les deux sont accessibles depuis votre Google Drive.
 
 1. **Ajoutez un ticket** : bouton « Prendre une photo » sur téléphone, « Choisir un fichier » pour un PDF ou une photo, glisser-déposer sur ordinateur, ou « Importer depuis Google Drive ».
 2. Les photos sont **compressées automatiquement** dans le navigateur (2200 px max) pour accélérer l'envoi et la lecture.
-3. Quelques secondes plus tard, une fenêtre s'ouvre avec les champs pré-remplis. Les incertitudes sont signalées en jaune.
-4. Corrigez si besoin, choisissez la catégorie et enregistrez.
+3. Quelques secondes plus tard, une fenêtre s'ouvre avec les champs pré-remplis, le détail des articles et les incertitudes signalées en jaune.
+4. Corrigez si besoin, choisissez la catégorie de chaque article et enregistrez. Les articles mis en gras sur le ticket sont marqués « en avant ».
 5. La ligne est ajoutée au Google Sheet et le tableau de bord se met à jour.
 
 Vous pouvez aussi :
 
-- **Ajouter** une dépense manuellement (`Ajouter`) ;
-- **Modifier** une ligne (crayon ou bouton « Modifier » sur mobile) ;
+- **Ajouter** une dépense manuellement (`Ajouter`), avec ou sans détail d'articles ;
+- **Modifier** une ligne (crayon ou bouton « Modifier » sur mobile), y compris les articles et les remises ;
 - **Supprimer** une ligne (corbeille ou bouton « Supprimer ») ;
 - **Importer des tickets depuis Google Drive** avec le bouton dédié (PDF ou photos déjà présents dans le Drive, jusqu'à 5 à la fois) ; les données se rafraîchissent après chaque modification, au retour sur l'onglet et toutes les 2 minutes ;
-- **Filtrer** par mois, par catégorie ou par recherche ;
-- **Consulter les statistiques** : évolution mensuelle, répartition par catégorie, moyens de paiement, jours de la semaine, top magasins, comparaison avec le mois précédent et budget ;
-- **Régler vos paramètres** : budget mensuel, catégorie par défaut, import Drive, compte Google ;
+- **Filtrer** par mois, catégorie, moyen de paiement, magasin, fourchette de prix ou présence d'économies, avec une recherche globale (magasin, note, article…) ;
+- **Consulter les statistiques** : évolution mensuelle, répartition par catégorie, moyens de paiement, jours de la semaine, top magasins, promos/économies globales, comparaison avec le mois précédent et budget ;
+- **Régler vos paramètres et votre profil** : nom affiché, budget mensuel, catégorie par défaut, import Drive, compte Google ;
 - **Lire le guide** intégré (`/app/aide`) : démarrage en 3 étapes, signification des chiffres, installation sur téléphone et questions fréquentes ;
 - **Ouvrir le Sheet** à tout moment depuis l'en-tête.
 
@@ -146,16 +150,25 @@ Vous pouvez aussi :
 
 ### Colonnes de la feuille
 
-| Date | Magasin | Catégorie | Montant | TVA | Paiement | Note | Ticket | Ajouté le |
-| ---- | ------- | --------- | ------- | --- | -------- | ---- | ------ | --------- |
+| Date | Magasin | Catégorie | Montant | Paiement | Note | Ticket | Ajouté le | Modifié le | Économies | Articles (JSON) |
+| ---- | ------- | --------- | ------- | -------- | ---- | ------ | --------- | ---------- | --------- | --------------- |
+
+- La TVA globale n'est plus demandée : chaque article peut porter son taux et son montant de TVA. La TVA totale du ticket est calculée à partir des articles (ou conservée depuis le ticket quand elle est globale).
+- Au premier lancement de la V2, les colonnes **Modifié le**, **Économies** et **Articles** sont ajoutées à droite ; l'ancienne colonne **TVA** est masquée. Aucune ligne ni aucune valeur n'est supprimée.
+- Les anciennes feuilles V1 gardent une colonne **TVA** masquée : ses valeurs restent conservées et prises en compte dans la TVA du ticket ; elles sont intégrées au JSON `Articles` lors de la prochaine modification de la ligne.
+- La colonne `Articles` contient le détail structuré (nom, quantité, prix unitaire, montant, TVA, remise, gras, catégorie) au format JSON. Elle reste lisible et modifiable depuis l'interface.
+- `Économies` cumule les remises et promos du ticket.
 
 Les catégories proposées : Alimentation, Restaurants, Transport, Carburant, Santé, Logement, Loisirs, Shopping, Abonnements, Divers.
 
 ### Ce que l'application sait lire
 
 - PDF **textuels** (Carrefour, Leclerc, Amazon, SNCF, factures en ligne…) : extraction directe, très fiable.
-- **Photos** JPG/PNG/WebP/HEIC : OCR local, puis détection de la date, du total, de la TVA, du moyen de paiement et du magasin (liste de marques françaises + heuristiques).
-- **TVA** : utilise le total explicite (`TOTAL TVA`, `DONT TVA`) ou additionne le tableau des taux (5,5 %, 10 %, 20 %) ; un contrôle de cohérence évite de confondre un taux avec un montant.
+- **Photos** JPG/PNG/WebP/HEIC : OCR local, puis détection de la date, du total, de la TVA, du moyen de paiement, du magasin et des articles.
+- **Détail des articles** : nom, quantité (`2 x 1,20`), prix unitaire, montant, TVA par taux et catégorie déduite du libellé et du contexte du magasin. Les lignes non reconnues reçoivent la catégorie du ticket, puis la catégorie par défaut.
+- **Articles en avant** : les polices grasses des PDF et les lignes nettement plus grandes sont marquées ; chaque article peut aussi être coché « en avant » à la main.
+- **Économies** : lignes `REMISE`, `RÉDUCTION`, `COUPON`, `AVANTAGE`, prix barrés et totaux `VOUS AVEZ ÉCONOMISÉ` sont cumulés.
+- **TVA** : le taux est lu séparément du montant (`TVA 20,00% 7,03`), les tableaux multi-taux sont additionnés et un taux seul est recalculé à partir du total. Fini la confusion entre « 20,00 » (taux) et « 20,00 € » (montant).
 - **Magasin** : enseignes connues en priorité, sinon nettoyage des adresses, mentions légales (SARL, SAS…), numéros de téléphone et slogans.
 - Les **PDF scannés** (image dans un PDF) ne sont pas OCRisés : l'application vous invite à envoyer une photo ou à saisir la dépense à la main.
 - Un ticket mal lu reste toujours modifiable avant enregistrement.
@@ -265,7 +278,8 @@ Dans tous les cas, `APP_URL` doit correspondre **exactement** à l'URI déclaré
 Les tests utilitaires (sans Google) :
 
 ```bash
-npm run test:parser   # heuristiques de lecture de tickets
+npm run test:parser   # heuristiques de lecture de tickets + articles
+npm run test:expenses # validation des dépenses, articles, économies et conflits
 npm run test:pdf      # extraction de texte d'un PDF
 npm run test:ocr      # OCR d'une image (télécharge le modèle au premier lancement)
 ```
@@ -281,17 +295,20 @@ src/
 │  ├─ app/page.tsx             # tableau de bord (serveur)
 │  └─ api/
 │     ├─ auth/...              # OAuth Google (login, callback, logout)
-│     ├─ extract/route.ts      # upload + OCR/PDF + analyse
-│     └─ expenses/...          # ajout, modification, suppression
+│     ├─ extract/route.ts      # upload + OCR/PDF + analyse + articles
+│     ├─ profile/route.ts      # profil utilisateur dans le Drive
+│     └─ expenses/...          # ajout, modification partielle, suppression
 ├─ components/
 │  ├─ landing/                 # page publique
-│  ├─ dashboard/               # tableau de bord, table, import, formulaire
-│  └─ ui/                      # modale, confirmation
+│  ├─ dashboard/               # tableau de bord, table, import, formulaire, conflits
+│  └─ ui/                      # modale, confirmation, menus, éditeur d'articles
 └─ lib/
    ├─ google.ts                # client OAuth
-   ├─ sheet.ts                 # Google Sheets + Drive
-   ├─ ocr.ts                   # Tesseract + pretraitement d'image
-   ├─ parse-receipt.ts         # heuristiques tickets français
+   ├─ sheet.ts                 # Google Sheets + Drive + schéma V2
+   ├─ items.ts                 # normalisation et calculs des articles
+   ├─ profile.ts               # profil lié au compte Google
+   ├─ ocr.ts                   # Tesseract + pretraitement d'image + gras
+   ├─ parse-receipt.ts         # heuristiques tickets français + articles
    └─ ...
 ```
 
@@ -308,6 +325,7 @@ src/
 - Pas de limite applicative au nombre de tickets.
 - Google Sheets limite un classeur à **10 millions de cellules**, soit environ **1,1 million de lignes** avec nos 9 colonnes.
 - Les photos sont limitées à **15 Mo par fichier** dans l'application.
+- Le détail des articles est stocké dans une cellule JSON par ticket (limite Google Sheets : 50 000 caractères par cellule, soit environ 150 articles maximum).
 - Import Drive : **5 tickets maximum par sélection**.
 - Import groupé : **20 lignes maximum par requête**.
 - L'OCR est séquentiel (un worker Tesseract) : comptez 20 à 60 s par photo sur Render, donc quelques minutes pour 5 tickets.

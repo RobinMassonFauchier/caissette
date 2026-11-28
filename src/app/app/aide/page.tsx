@@ -34,7 +34,7 @@ const STEPS = [
   {
     icon: CheckCircle2,
     title: "2. Vérifiez",
-    text: "Caissette pré-remplit la date, le magasin, le montant et la catégorie. Corrigez si besoin, puis enregistrez.",
+    text: "Caissette pré-remplit la date, le magasin, le montant, la catégorie et le détail des articles. Corrigez si besoin, puis enregistrez.",
   },
   {
     icon: Table2,
@@ -44,6 +44,21 @@ const STEPS = [
 ];
 
 const FAQ = [
+  {
+    question: "Puis-je voir le détail des articles d'un ticket ?",
+    answer:
+      "Oui. Caissette lit le nom, la quantité, le prix et la catégorie de chaque ligne quand le ticket s'y prête. Vous pouvez corriger, ajouter un article ou une remise dans la fenêtre de vérification, puis rouvrir le ticket plus tard pour ajuster le détail.",
+  },
+  {
+    question: "Comment sont calculées les économies ?",
+    answer:
+      "Les lignes de remise, les prix barrés et les mentions « vous avez économisé » sont additionnés. Le tableau de bord et les statistiques affichent le total des promos, le pourcentage que cela représente et les magasins qui font le plus économiser.",
+  },
+  {
+    question: "Où est stocké mon profil ?",
+    answer:
+      "Dans votre propre Google Drive, dans le dossier « Tickets de caisse — Caissette ». Le fichier porte l'empreinte de votre identifiant Google, pas votre e-mail. Aucune donnée de profil n'est conservée sur le serveur de Caissette.",
+  },
   {
     question: "Est-ce vraiment gratuit ?",
     answer:

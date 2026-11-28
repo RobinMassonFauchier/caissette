@@ -10,11 +10,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Expense, SessionUser } from "@/lib/types";
+import type { Expense, SessionUser, UserProfile } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 
 export type WorkspaceData = {
   user: SessionUser;
+  profile: UserProfile;
   expenses: Expense[];
   settings: AppSettings;
   sheetUrl: string;
@@ -25,6 +26,7 @@ export type WorkspaceData = {
 type WorkspaceContextValue = WorkspaceData & {
   refresh: () => Promise<void>;
   setSettings: (settings: AppSettings) => void;
+  setProfile: (profile: UserProfile) => void;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -56,6 +58,7 @@ export function WorkspaceProvider({
           ...current,
           expenses: payload.expenses ?? [],
           settings: payload.settings ?? current.settings,
+          profile: payload.profile ?? current.profile,
           sheetUrl: payload.sheetUrl ?? current.sheetUrl,
           folderId: payload.folderId ?? current.folderId,
           error: null,
@@ -73,6 +76,10 @@ export function WorkspaceProvider({
 
   const setSettings = useCallback((settings: AppSettings) => {
     setData((current) => ({ ...current, settings }));
+  }, []);
+
+  const setProfile = useCallback((profile: UserProfile) => {
+    setData((current) => ({ ...current, profile }));
   }, []);
 
   // Rafraîchit les données quand l'onglet redevient actif et toutes les 2 min,
@@ -107,7 +114,7 @@ export function WorkspaceProvider({
   }, [refresh]);
 
   return (
-    <WorkspaceContext.Provider value={{ ...data, refresh, setSettings }}>
+    <WorkspaceContext.Provider value={{ ...data, refresh, setSettings, setProfile }}>
       {children}
     </WorkspaceContext.Provider>
   );

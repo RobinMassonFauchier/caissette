@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAuthClient } from "@/lib/google";
 import { ensureWorkspace, uploadReceipt } from "@/lib/sheet";
-import { extractPdfText, preprocessImage, recognizeImage } from "@/lib/ocr";
+import {
+  extractPdfContent,
+  preprocessImage,
+  recognizeImageWithStyle,
+} from "@/lib/ocr";
 import { parseReceipt } from "@/lib/parse-receipt";
+import { readSettings } from "@/lib/settings";
 import { describeGoogleError } from "@/lib/google-errors";
+import type { Category } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,11 +114,14 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await upload.arrayBuffer());
 
   let text = "";
+  let boldLines: string[] = [];
   let source: "pdf" | "ocr" = "pdf";
 
   try {
     if (isPdf) {
-      text = await extractPdfText(buffer);
+      const content = await extractPdfContent(buffer);
+      text = content.text;
+      boldLines = content.boldLines;
       if (text.replace(/\s/g, "").length < 40) {
         return NextResponse.json(
           {
@@ -126,7 +135,9 @@ export async function POST(request: Request) {
     } else {
       source = "ocr";
       const preprocessed = await preprocessImage(buffer);
-      text = await recognizeImage(preprocessed);
+      const content = await recognizeImageWithStyle(preprocessed);
+      text = content.text;
+      boldLines = content.boldLines;
       if (text.replace(/\s/g, "").length < 10) {
         return NextResponse.json(
           {
@@ -159,20 +170,34 @@ export async function POST(request: Request) {
     );
   }
 
-  const parsed = parseReceipt(text);
+  let defaultCategory: Category = "Divers";
+  let authClient: Awaited<ReturnType<typeof getAuthClient>> | null = null;
+  let workspace: Awaited<ReturnType<typeof ensureWorkspace>> | null = null;
+
+  try {
+    authClient = await getAuthClient(session.refreshToken);
+    workspace = await ensureWorkspace(authClient);
+    const settings = await readSettings(authClient, workspace.folderId);
+    defaultCategory = settings.defaultCategory;
+  } catch (error) {
+    console.error("Lecture des préférences impossible :", error);
+  }
+
+  const parsed = parseReceipt(text, { defaultCategory, boldLines });
 
   // Archive du ticket original dans le Drive de l'utilisateur (best effort).
   let fileUrl = "";
   let archivedName = "";
   try {
-    const auth = await getAuthClient(session.refreshToken);
-    const workspace = await ensureWorkspace(auth);
+    if (!authClient || !workspace) {
+      throw new Error("session Google indisponible");
+    }
     const extension = extensionFor(mimeType, fileName);
     const base = sanitizeFileName(
       `${parsed.date}_${parsed.merchant || "ticket"}_${Math.random().toString(36).slice(2, 7)}`,
     );
     archivedName = `${base}.${extension}`;
-    fileUrl = await uploadReceipt(auth, workspace.folderId, {
+    fileUrl = await uploadReceipt(authClient, workspace.folderId, {
       buffer,
       mimeType: mimeType || (isPdf ? "application/pdf" : "image/jpeg"),
       name: archivedName,

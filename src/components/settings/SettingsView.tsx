@@ -14,12 +14,13 @@ import {
   Mail,
   ShieldCheck,
   TriangleAlert,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/app/WorkspaceProvider";
 import { CategorySelect } from "@/components/ui/CategorySelect";
 import { fieldClass } from "@/components/ui/field-styles";
-import { parseAmountInput } from "@/lib/format";
+import { formatDateShort, parseAmountInput } from "@/lib/format";
 import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +60,7 @@ function Toggle({
 }
 
 export function SettingsView() {
-  const { user, settings, sheetUrl, folderId, error, setSettings } =
+  const { user, profile, settings, sheetUrl, folderId, error, setSettings, setProfile } =
     useWorkspace();
   const folderUrl = folderId
     ? `https://drive.google.com/drive/folders/${folderId}`
@@ -78,6 +79,12 @@ export function SettingsView() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [displayName, setDisplayName] = useState(
+    profile.displayName || user.name || "",
+  );
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const parsedBudget = budget.trim() ? parseAmountInput(budget) : null;
   const budgetChanged =
@@ -148,7 +155,43 @@ export function SettingsView() {
     }
   }
 
-  const initials = (user.name || user.email || "?")
+  async function saveProfile() {
+    setProfileError(null);
+    setProfileSaved(false);
+
+    const value = displayName.trim();
+    if (value.length < 2) {
+      setProfileError("Choisissez un nom d'affichage d'au moins 2 caractères.");
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: value }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Enregistrement du profil impossible.");
+      }
+      if (data.profile) setProfile(data.profile);
+      setProfileSaved(true);
+      toast.success("Profil enregistré");
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : "Enregistrement du profil impossible.";
+      setProfileError(message);
+      toast.error(message);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  const initials = (displayName || user.name || user.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -183,6 +226,108 @@ export function SettingsView() {
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-5">
+            <section className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <span className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+                  <UserRound className="size-4" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-stone-900">
+                    Mon profil
+                  </h2>
+                  <p className="text-[11px] text-stone-500">
+                    Un profil privé, lié à votre compte Google.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start">
+                {profile.picture || user.picture ? (
+                  <img
+                    src={profile.picture || user.picture}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="size-14 shrink-0 rounded-full object-cover ring-4 ring-stone-100"
+                  />
+                ) : (
+                  <span className="grid size-14 shrink-0 place-items-center rounded-full bg-emerald-100 text-base font-semibold text-emerald-700 ring-4 ring-stone-100">
+                    {initials}
+                  </span>
+                )}
+
+                <div className="min-w-0 flex-1 space-y-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
+                      Nom affiché
+                    </span>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(event) => {
+                          setDisplayName(event.target.value);
+                          setProfileSaved(false);
+                        }}
+                        maxLength={60}
+                        placeholder="Votre prénom"
+                        className={fieldClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={saveProfile}
+                        disabled={
+                          profileSaving ||
+                          displayName.trim().length < 2 ||
+                          displayName.trim() ===
+                            (profile.displayName || user.name || "")
+                        }
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-40"
+                      >
+                        {profileSaving ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : profileSaved ? (
+                          <Check className="size-3.5" strokeWidth={2.5} />
+                        ) : (
+                          <UserRound className="size-3.5" />
+                        )}
+                        {profileSaved ? "Enregistré" : "Enregistrer"}
+                      </button>
+                    </div>
+                  </label>
+
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-stone-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Mail className="size-3" />
+                      {user.email}
+                    </span>
+                    <span className="text-stone-300">·</span>
+                    <span>
+                      Compte Google lié
+                      {profile.createdAt
+                        ? ` depuis le ${formatDateShort(profile.createdAt)}`
+                        : ""}
+                    </span>
+                  </p>
+
+                  {profileError && (
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700"
+                    >
+                      {profileError}
+                    </p>
+                  )}
+
+                  <p className="text-[10.5px] leading-relaxed text-stone-500">
+                    Le profil est un petit fichier JSON rangé dans votre dossier
+                    Drive « Tickets de caisse — Caissette ». Son nom utilise
+                    l&apos;empreinte de votre identifiant Google, jamais votre
+                    e-mail ni un mot de passe.
+                  </p>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2.5">
                 <span className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
@@ -402,9 +547,9 @@ export function SettingsView() {
           <aside className="space-y-5">
             <section className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm">
               <div className="flex flex-col items-center text-center">
-                {user.picture ? (
+                {profile.picture || user.picture ? (
                   <img
-                    src={user.picture}
+                    src={profile.picture || user.picture}
                     alt=""
                     referrerPolicy="no-referrer"
                     className="size-16 rounded-full object-cover ring-4 ring-stone-100"
@@ -415,7 +560,7 @@ export function SettingsView() {
                   </span>
                 )}
                 <p className="mt-3 text-sm font-semibold text-stone-900">
-                  {user.name}
+                  {profile.displayName || user.name}
                 </p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
                   <Mail className="size-3" />

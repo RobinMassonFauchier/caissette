@@ -1,8 +1,9 @@
-import { parseReceipt } from "../src/lib/parse-receipt";
+import { parseReceipt, type ParseReceiptOptions } from "../src/lib/parse-receipt";
 
 type Case = {
   name: string;
   text: string;
+  options?: ParseReceiptOptions;
   expect: Partial<{
     date: string;
     merchant: string;
@@ -10,6 +11,15 @@ type Case = {
     amount: number;
     payment: string;
     tva: number | null;
+    savings: number;
+    ticketSavings: number;
+    itemCount: number;
+    firstItem: string;
+    firstCategory: string;
+    firstQuantity: number;
+    firstAmount: number;
+    firstUnitPrice: number;
+    firstBold: boolean;
   }>;
 };
 
@@ -37,6 +47,16 @@ MERCI DE VOTRE VISITE`,
     expect: { date: "2026-11-20", merchant: "Carrefour Market", amount: 42.18, tva: 7.03, payment: "Carte bancaire" },
   },
   {
+    name: "TVA taux seul puis taux avec montant",
+    text: `LIDL
+Date 22/11/2026
+TVA 20
+TVA 20,00% 7,03
+TOTAL 42,18
+CB`,
+    expect: { merchant: "Lidl", amount: 42.18, tva: 7.03 },
+  },
+  {
     name: "TVA multi-taux avec total explicite",
     text: `CARREFOUR MARKET
 12 RUE DE LA PAIX
@@ -59,13 +79,22 @@ CB 42,18`,
     expect: { merchant: "Lidl", amount: 42.18, tva: 7.55 },
   },
   {
-    name: "Taux de TVA sans pourcentage ne doit pas être pris pour un montant",
+    name: "Taux de TVA seul recalculé à partir du total",
     text: `LIDL
 Date 22/11/2026
 TVA 20,00
 TOTAL 42,18
 CB`,
-    expect: { merchant: "Lidl", amount: 42.18, tva: null },
+    expect: { merchant: "Lidl", amount: 42.18, tva: 7.03 },
+  },
+  {
+    name: "TVA 20 sans décimales ni pourcentage",
+    text: `LIDL
+Date 22/11/2026
+TVA 20
+TOTAL 42,18
+CB`,
+    expect: { merchant: "Lidl", amount: 42.18, tva: 7.03 },
   },
   {
     name: "TVA sans signe pourcentage mais avec montant",
@@ -165,16 +194,99 @@ Date 09/11/2026
 TOTAL 18,90`,
     expect: { merchant: "Le Petit Marche", amount: 18.9, category: "Alimentation" },
   },
+  {
+    name: "Détail des articles, quantités et remise",
+    text: `CARREFOUR MARKET
+Date 20/11/2026
+2 X PAIN 1,20 2,40
+LAIT 2,45
+DIVERS 38,53
+REMISE 2,50
+TOTAL TTC 40,88
+TVA 5,50% 0,52
+TVA 20,00% 6,29
+TOTAL TVA 6,81
+CARTE BANCAIRE 40,88`,
+    expect: {
+      amount: 40.88,
+      tva: 6.81,
+      itemCount: 4,
+      savings: 2.5,
+      firstItem: "PAIN",
+      firstQuantity: 2,
+      firstAmount: 2.4,
+      firstUnitPrice: 1.2,
+      firstCategory: "Alimentation",
+    },
+  },
+  {
+    name: "Article en gras détecté par le PDF",
+    text: `CARREFOUR MARKET
+Date 20/11/2026
+PROMO CAFE 3,49
+LAIT 2,45
+TOTAL 5,94`,
+    options: { boldLines: ["PROMO CAFE 3,49"] },
+    expect: {
+      firstItem: "PROMO CAFE",
+      firstBold: true,
+      itemCount: 2,
+    },
+  },
+  {
+    name: "Catégorie d'article non alimentaire dans un supermarché",
+    text: `CARREFOUR MARKET
+Date 20/11/2026
+LESSIVE 6,50
+SHAMPOO 4,20
+PAIN 1,20
+TOTAL 11,90`,
+    expect: {
+      itemCount: 3,
+      firstItem: "LESSIVE",
+      firstCategory: "Logement",
+    },
+  },
+  {
+    name: "Catégorie par défaut pour un article inconnu",
+    text: `LE PETIT MARCHE
+Date 09/11/2026
+PRODUIT MYSTERE 4,00
+TOTAL 4,00`,
+    options: { defaultCategory: "Divers" },
+    expect: { itemCount: 1, firstCategory: "Alimentation" },
+  },
+  {
+    name: "Économie globale sans détail",
+    text: `LIDL
+Date 07/11/2026
+TOTAL 12,50
+VOUS AVEZ ECONOMISE 3,20
+CB 12,50`,
+    expect: { amount: 12.5, savings: 3.2, ticketSavings: 3.2 },
+  },
 ];
 
 let failures = 0;
 
 for (const testCase of cases) {
-  const result = parseReceipt(testCase.text);
+  const result = parseReceipt(testCase.text, testCase.options);
+  const first = result.items[0];
+  const actualValues: Record<string, unknown> = {
+    ...result,
+    savings: result.savings,
+    itemCount: result.items.length,
+    firstItem: first?.label,
+    firstCategory: first?.category,
+    firstQuantity: first?.quantity,
+    firstAmount: first?.amount,
+    firstUnitPrice: first?.unitPrice ?? undefined,
+    firstBold: first?.bold,
+  };
   const problems: string[] = [];
 
   for (const [key, expected] of Object.entries(testCase.expect)) {
-    const actual = result[key as keyof typeof result];
+    const actual = actualValues[key];
     if (actual !== expected) {
       problems.push(`${key}: attendu ${JSON.stringify(expected)}, obtenu ${JSON.stringify(actual)}`);
     }

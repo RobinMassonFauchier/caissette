@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  BadgePercent,
   Calculator,
   Camera,
   CheckCircle2,
@@ -30,6 +31,7 @@ import { UploadCard } from "@/components/dashboard/UploadCard";
 import { DriveImportButton } from "@/components/dashboard/DriveImportButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { BatchImportDialog } from "@/components/dashboard/BatchImportDialog";
+import { ConflictDialog } from "@/components/dashboard/ConflictDialog";
 import { currentMonth, formatEuro, monthLabel, todayISO } from "@/lib/format";
 import type {
   DriveImportResult,
@@ -40,7 +42,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
-  const { user, expenses, settings, error, refresh } = useWorkspace();
+  const { user, profile, expenses, settings, error, refresh } = useWorkspace();
   const [month, setMonth] = useState(currentMonth());
   const [creating, setCreating] = useState<ExpenseDialogInitial | null>(null);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -49,6 +51,11 @@ export default function Dashboard() {
   const [batchImport, setBatchImport] = useState<DriveImportResult[] | null>(
     null,
   );
+  const [conflict, setConflict] = useState<{
+    current: Expense;
+    payload: ExpensePayload;
+  } | null>(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
 
   const monthExpenses = useMemo(
     () =>
@@ -76,13 +83,38 @@ export default function Dashboard() {
     const topCategory =
       [...totals.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
 
-    return { total, count, average, topCategory };
+    const savings = monthExpenses.reduce(
+      (sum, expense) => sum + expense.savings,
+      0,
+    );
+    const savingsCount = monthExpenses.filter(
+      (expense) => expense.savings > 0,
+    ).length;
+
+    return {
+      total,
+      count,
+      average,
+      topCategory,
+      savings,
+      savingsCount,
+      savingsRate: total > 0 ? (savings / total) * 100 : 0,
+    };
   }, [monthExpenses]);
 
-  const { total, count, average, topCategory } = summary;
+  const {
+    total,
+    count,
+    average,
+    topCategory,
+    savings,
+    savingsCount,
+    savingsRate,
+  } = summary;
   const hasAnyExpense = expenses.length > 0;
 
-  const firstName = user.name?.split(" ")[0] || "vous";
+  const firstName =
+    (profile.displayName || user.name)?.split(" ")[0] || "vous";
 
   function handleExtracted(receipt: ExtractedReceipt) {
     setCreating({
@@ -94,6 +126,10 @@ export default function Dashboard() {
       payment: receipt.payment,
       note: "",
       receiptUrl: receipt.fileUrl,
+      items: receipt.items,
+      savings: receipt.savings,
+      ticketSavings: receipt.ticketSavings,
+      defaultCategory: settings.defaultCategory,
       warnings: receipt.warnings,
       rawText: receipt.rawText,
     });
@@ -123,27 +159,78 @@ export default function Dashboard() {
     }
   }
 
-  async function updateExpense(payload: ExpensePayload) {
+  async function updateExpense(payload: ExpensePayload, force = false) {
     if (!editing) return;
 
     const response = await fetch(`/api/expenses/${editing.row}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        force,
+        expectedOriginal: {
+          date: editing.date,
+          merchant: editing.merchant,
+          amount: editing.amount,
+          createdAt: editing.createdAt,
+        },
+      }),
     });
     const data = await response.json().catch(() => ({}));
+
+    if (response.status === 409 && data.current) {
+      setConflict({ current: data.current as Expense, payload });
+      throw new Error(
+        data.error ||
+          "Ce ticket a été modifié entre-temps. Choisissez comment continuer.",
+      );
+    }
 
     if (!response.ok) {
       throw new Error(data.error || "Modification impossible. Réessayez.");
     }
 
     toast.success("Dépense mise à jour");
+    setConflict(null);
     setMonth(payload.date.slice(0, 7));
     setEditing(null);
     try {
       await refresh();
     } catch {
       toast.error("Dépense mise à jour, mais le tableau n'a pas pu se rafraîchir.");
+    }
+  }
+
+  async function reloadConflict() {
+    if (!conflict) return;
+    setConflictBusy(true);
+    try {
+      await refresh();
+      setConflict(null);
+      setEditing(null);
+      toast.success("Version à jour rechargée", {
+        description: "Rouvrez le ticket pour repartir de la version enregistrée.",
+      });
+    } catch {
+      toast.error("Impossible de recharger le ticket.");
+    } finally {
+      setConflictBusy(false);
+    }
+  }
+
+  async function forceConflict() {
+    if (!conflict) return;
+    setConflictBusy(true);
+    try {
+      await updateExpense(conflict.payload, true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'enregistrer vos modifications.",
+      );
+    } finally {
+      setConflictBusy(false);
     }
   }
 
@@ -263,12 +350,12 @@ export default function Dashboard() {
                       {
                         icon: CheckCircle2,
                         title: "2. Vérifiez",
-                        text: "Date, magasin et montant sont pré-remplis.",
+                        text: "Date, magasin, montant et articles sont pré-remplis.",
                       },
                       {
                         icon: Table2,
                         title: "3. C'est rangé",
-                        text: "La ligne arrive dans votre Sheet.",
+                        text: "La ligne et ses articles arrivent dans votre Sheet.",
                       },
                     ].map(({ icon: Icon, title, text }) => (
                       <li
@@ -291,7 +378,7 @@ export default function Dashboard() {
               </section>
             )}
 
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
               <StatCard
                 label="Total"
                 value={formatEuro(total)}
@@ -325,6 +412,19 @@ export default function Dashboard() {
                 tone="bg-amber-50 text-amber-700"
                 small={Boolean(topCategory)}
               />
+              <div className="col-span-2 sm:col-span-1">
+                <StatCard
+                  label="Promos / économies"
+                  value={savings > 0 ? formatEuro(savings) : "—"}
+                  hint={
+                    savings > 0
+                      ? `${savingsRate.toFixed(1).replace(".", ",")} % du total · ${savingsCount} ticket${savingsCount > 1 ? "s" : ""}`
+                      : "aucune remise enregistrée"
+                  }
+                  icon={BadgePercent}
+                  tone="bg-emerald-50 text-emerald-700"
+                />
+              </div>
             </div>
 
             <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_350px]">
@@ -356,6 +456,12 @@ export default function Dashboard() {
                     label={monthLabel(month)}
                   />
                 )}
+                <SavingsCard
+                  savings={savings}
+                  rate={savingsRate}
+                  count={savingsCount}
+                  label={monthLabel(month)}
+                />
                 <CategoryBreakdown expenses={monthExpenses} />
 
                 <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-white to-stone-50 p-4 shadow-sm sm:p-5">
@@ -397,7 +503,7 @@ export default function Dashboard() {
         <ExpenseDialog
           key="create"
           mode="create"
-          initial={creating}
+          initial={{ ...creating, defaultCategory: settings.defaultCategory }}
           onClose={() => setCreating(null)}
           onSubmit={createExpense}
         />
@@ -416,9 +522,27 @@ export default function Dashboard() {
             payment: editing.payment,
             note: editing.note,
             receiptUrl: editing.receiptUrl,
+            items: editing.items,
+            savings: editing.savings,
+            ticketSavings: editing.ticketSavings,
+            updatedAt: editing.updatedAt,
+            defaultCategory: settings.defaultCategory,
           }}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            setConflict(null);
+          }}
           onSubmit={updateExpense}
+        />
+      )}
+
+      {conflict && editing && (
+        <ConflictDialog
+          current={conflict.current}
+          busy={conflictBusy}
+          onReload={reloadConflict}
+          onForce={forceConflict}
+          onClose={() => setConflict(null)}
         />
       )}
 
@@ -449,6 +573,63 @@ export default function Dashboard() {
         />
       )}
     </>
+  );
+}
+
+function SavingsCard({
+  savings,
+  rate,
+  count,
+  label,
+}: {
+  savings: number;
+  rate: number;
+  count: number;
+  label: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-amber-50/50 p-4 shadow-sm sm:p-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-emerald-100 text-emerald-700">
+            <BadgePercent className="size-3.5" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-stone-900">
+              Promos & économies
+            </h2>
+            <p className="text-[10px] capitalize text-stone-500">{label}</p>
+          </div>
+        </div>
+        {savings > 0 && (
+          <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+            {rate.toFixed(1).replace(".", ",")} %
+          </span>
+        )}
+      </div>
+
+      {savings > 0 ? (
+        <>
+          <p className="mt-3 text-xl font-semibold tabular-nums text-emerald-800">
+            {formatEuro(savings)}
+          </p>
+          <p className="mt-0.5 text-[11.5px] text-stone-600">
+            cumulés sur {count} ticket{count > 1 ? "s" : ""} avec remise
+          </p>
+          <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/80">
+            <div
+              className="h-full rounded-full bg-emerald-500"
+              style={{ width: `${Math.min(100, Math.max(2, rate))}%` }}
+            />
+          </div>
+        </>
+      ) : (
+        <p className="mt-2.5 text-[12px] leading-relaxed text-stone-600">
+          Les remises, promos et coupons lus sur les tickets apparaîtront ici.
+          Ajoutez une remise dans le détail d&apos;un ticket pour commencer.
+        </p>
+      )}
+    </section>
   );
 }
 

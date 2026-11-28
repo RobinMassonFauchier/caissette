@@ -2,29 +2,23 @@
 
 import { useState } from "react";
 import {
-  ArrowRightLeft,
-  Banknote,
   Check,
-  CreditCard,
-  Landmark,
   Loader2,
   Paperclip,
   Sparkles,
   TriangleAlert,
-  Wallet,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { CategorySelect } from "@/components/ui/CategorySelect";
-import {
-  OptionSelect,
-  type SelectOption,
-} from "@/components/ui/OptionSelect";
+import { PaymentSelect } from "@/components/ui/PaymentSelect";
+import { ItemsEditor } from "@/components/ui/ItemsEditor";
 import { fieldClass } from "@/components/ui/field-styles";
-import {
-  PAYMENT_METHODS,
-} from "@/lib/catalog";
 import { parseAmountInput, todayISO } from "@/lib/format";
-import type { Category, ExpensePayload } from "@/lib/types";
+import type {
+  Category,
+  ExpensePayload,
+  ReceiptItem,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type ExpenseDialogInitial = {
@@ -36,36 +30,13 @@ export type ExpenseDialogInitial = {
   payment?: string;
   note?: string;
   receiptUrl?: string;
+  items?: ReceiptItem[];
+  savings?: number;
+  ticketSavings?: number;
+  updatedAt?: string;
   warnings?: string[];
   rawText?: string;
-};
-
-const PAYMENT_STYLES: Record<string, { icon: typeof Wallet; chip: string }> = {
-  "Carte bancaire": {
-    icon: CreditCard,
-    chip: "bg-sky-50 text-sky-700 ring-sky-600/15",
-  },
-  Espèces: {
-    icon: Banknote,
-    chip: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
-  },
-  Chèque: {
-    icon: Landmark,
-    chip: "bg-amber-50 text-amber-700 ring-amber-600/15",
-  },
-  Virement: {
-    icon: ArrowRightLeft,
-    chip: "bg-violet-50 text-violet-700 ring-violet-600/15",
-  },
-  Autre: {
-    icon: Wallet,
-    chip: "bg-stone-100 text-stone-600 ring-stone-600/15",
-  },
-};
-
-const DEFAULT_PAYMENT_STYLE = {
-  icon: Wallet,
-  chip: "bg-stone-100 text-stone-600 ring-stone-600/15",
+  defaultCategory?: Category;
 };
 
 function cents(value: number): string {
@@ -85,30 +56,40 @@ export function ExpenseDialog({
 }) {
   const [date, setDate] = useState(initial.date || todayISO());
   const [merchant, setMerchant] = useState(initial.merchant || "");
-  const [category, setCategory] = useState<Category>(initial.category || "Alimentation");
-  const [amount, setAmount] = useState(
-    initial.amount !== null && initial.amount !== undefined ? cents(initial.amount) : "",
+  const [category, setCategory] = useState<Category>(
+    initial.category || initial.defaultCategory || "Alimentation",
   );
-  const [tva, setTva] = useState(
-    initial.tva !== null && initial.tva !== undefined ? cents(initial.tva) : "",
+  const [amount, setAmount] = useState(
+    initial.amount !== null && initial.amount !== undefined
+      ? cents(initial.amount)
+      : "",
   );
   const [payment, setPayment] = useState(initial.payment || "Carte bancaire");
   const [note, setNote] = useState(initial.note || "");
+  const [items, setItems] = useState<ReceiptItem[]>(initial.items ?? []);
+  const [itemsTouched, setItemsTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const paymentValues = (PAYMENT_METHODS as string[]).includes(payment)
-    ? (PAYMENT_METHODS as string[])
-    : [payment, ...(PAYMENT_METHODS as string[])];
-
-  const paymentOptions: SelectOption<string>[] = paymentValues.map((option) => ({
-    value: option,
-    label: option,
-    ...(PAYMENT_STYLES[option] ?? DEFAULT_PAYMENT_STYLE),
-  }));
-
   const warnings = initial.warnings ?? [];
   const isScanned = Boolean(initial.rawText);
+  const defaultCategory = initial.defaultCategory || category;
+  const itemDefaultCategory =
+    initial.category && initial.category !== "Divers"
+      ? initial.category
+      : defaultCategory;
+
+  const itemTva =
+    items.reduce((sum, item) => sum + (item.tva ?? 0), 0) || null;
+  const amountForDisplay = parseAmountInput(amount);
+  const legacyTicketTva =
+    initial.tva !== null &&
+    initial.tva !== undefined &&
+    amountForDisplay !== null &&
+    initial.tva <= amountForDisplay
+      ? initial.tva
+      : null;
+  const displayedTva = itemTva ?? legacyTicketTva;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -129,24 +110,50 @@ export function ExpenseDialog({
       return;
     }
 
-    const tvaValue = tva.trim() ? parseAmountInput(tva) : null;
-    if (tvaValue !== null && (tvaValue < 0 || tvaValue > amountValue)) {
-      setError("La TVA doit être comprise entre 0 et le montant total.");
-      return;
+    const payload: ExpensePayload = {
+      date,
+      merchant: merchant.trim(),
+      category,
+      amount: Math.round(amountValue * 100) / 100,
+      payment,
+      note: note.trim(),
+      receiptUrl: initial.receiptUrl || "",
+    };
+
+    // La TVA globale n'est envoyée qu'à la création. En modification, le
+    // serveur conserve celle du ticket (ou la recalcule depuis les articles)
+    // pour ne jamais bloquer un changement de montant.
+    if (
+      mode === "create" &&
+      initial.tva !== null &&
+      initial.tva !== undefined &&
+      initial.tva <= amountValue
+    ) {
+      payload.ticketTva = initial.tva;
+    }
+
+    // En création, les articles sont toujours transmis. En modification, on ne
+    // les envoie que s'ils ont réellement changé : un ancien ticket V1 conserve
+    // ainsi sa TVA héritée, et une modification de date ne réécrit pas le détail.
+    const initialItems = initial.items ?? [];
+    const itemsChanged =
+      itemsTouched &&
+      JSON.stringify(items) !== JSON.stringify(initialItems);
+
+    if (mode === "create" || itemsChanged) {
+      payload.items = items;
+      payload.ticketSavings = Math.min(
+        initial.ticketSavings ?? 0,
+        amountValue,
+      );
+    }
+    if (mode === "edit") {
+      payload.expectedUpdatedAt = initial.updatedAt ?? "";
     }
 
     setSaving(true);
     try {
-      await onSubmit({
-        date,
-        merchant: merchant.trim(),
-        category,
-        amount: Math.round(amountValue * 100) / 100,
-        tva: tvaValue === null ? null : Math.round(tvaValue * 100) / 100,
-        payment,
-        note: note.trim(),
-        receiptUrl: initial.receiptUrl || "",
-      });
+      await onSubmit(payload);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -165,9 +172,10 @@ export function ExpenseDialog({
           ? isScanned
             ? "Vérifiez les informations lues sur le ticket avant de l'enregistrer."
             : "Renseignez les informations de la dépense."
-          : "Corrigez les informations puis enregistrez."
+          : "Corrigez les informations puis enregistrez. Seuls les champs modifiés sont réécrits."
       }
       onClose={onClose}
+      width="sm:max-w-3xl"
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="hidden text-xs text-stone-500 sm:block">
@@ -207,8 +215,8 @@ export function ExpenseDialog({
                 Ticket lu automatiquement
               </p>
               <p className="mt-0.5 text-[12px] leading-relaxed text-emerald-800">
-                Vérifiez surtout la date, le magasin et le montant, puis
-                enregistrez. Tout reste modifiable plus tard.
+                Vérifiez la date, le magasin, le montant et le détail des
+                articles. Tout reste modifiable plus tard.
               </p>
             </div>
           </div>
@@ -297,49 +305,11 @@ export function ExpenseDialog({
             <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
               Moyen de paiement
             </span>
-            <OptionSelect
+            <PaymentSelect
               value={payment}
               onChange={setPayment}
-              options={paymentOptions}
               ariaLabel="Moyen de paiement"
             />
-          </div>
-
-          <label className="block">
-            <span className="mb-1.5 block text-[13px] font-medium text-stone-700">
-              TVA <span className="font-normal text-stone-500">(facultatif)</span>
-            </span>
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={tva}
-                onChange={(event) => setTva(event.target.value)}
-                placeholder="0,00"
-                className={cn(fieldClass, "pr-9 tabular-nums")}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-stone-500">
-                €
-              </span>
-            </div>
-            <span className="mt-1 block text-[11px] leading-relaxed text-stone-500">
-              Montant de TVA indiqué sur certains tickets. Laissez vide si vous
-              ne le connaissez pas.
-            </span>
-          </label>
-
-          <div className="hidden items-end pb-1 sm:flex">
-            {initial.receiptUrl && (
-              <a
-                href={initial.receiptUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
-              >
-                <Paperclip className="size-3.5" />
-                Voir le ticket original
-              </a>
-            )}
           </div>
 
           <label className="block sm:col-span-2">
@@ -357,12 +327,44 @@ export function ExpenseDialog({
           </label>
         </div>
 
+        <ItemsEditor
+          items={items}
+          onChange={(next) => {
+            setItems(next);
+            setItemsTouched(true);
+          }}
+          defaultCategory={itemDefaultCategory}
+          ticketTotal={parseAmountInput(amount)}
+        />
+
+        {displayedTva !== null && displayedTva > 0 && (
+          <p className="text-[11px] leading-relaxed text-stone-500">
+            TVA {itemTva ? "calculée à partir des articles" : "enregistrée sur ce ticket"} :{" "}
+            <strong className="text-stone-700">
+              {displayedTva.toFixed(2).replace(".", ",")} €
+            </strong>
+            . Elle n&apos;est plus saisie globalement : chaque article peut
+            porter son propre taux, repris du ticket.
+          </p>
+        )}
+
+        {(initial.ticketSavings ?? 0) > 0 && (
+          <p className="text-[11px] leading-relaxed text-stone-500">
+            Remise globale lue sur le ticket :{" "}
+            <strong className="text-stone-700">
+              {(initial.ticketSavings ?? 0).toFixed(2).replace(".", ",")} €
+            </strong>
+            . Elle est prise en compte dans les économies, sans double
+            comptage.
+          </p>
+        )}
+
         {initial.receiptUrl && (
           <a
             href={initial.receiptUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-emerald-700 hover:underline sm:hidden"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-emerald-700 hover:underline"
           >
             <Paperclip className="size-3.5" />
             Voir le ticket original

@@ -6,6 +6,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   ArrowRight,
+  BadgePercent,
   Banknote,
   CalendarDays,
   ChartPie,
@@ -130,6 +131,46 @@ export function StatsView() {
       map.set(expense.payment, (map.get(expense.payment) ?? 0) + expense.amount);
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [yearExpenses]);
+
+  const totalSavings = yearExpenses.reduce(
+    (sum, expense) => sum + expense.savings,
+    0,
+  );
+  const savingsCount = yearExpenses.filter(
+    (expense) => expense.savings > 0,
+  ).length;
+  const savingsRate = totalYear > 0 ? (totalSavings / totalYear) * 100 : 0;
+
+  const monthlySavings = useMemo(() => {
+    const totals = Array.from({ length: 12 }, () => 0);
+    for (const expense of yearExpenses) {
+      const month = monthOf(expense);
+      if (month >= 0 && month < 12) totals[month] += expense.savings;
+    }
+    return totals;
+  }, [yearExpenses]);
+
+  const maxMonthlySavings = Math.max(...monthlySavings, 0);
+
+  const savingsMerchants = useMemo(() => {
+    const map = new Map<string, { savings: number; count: number; total: number }>();
+    for (const expense of yearExpenses) {
+      if (expense.savings <= 0) continue;
+      const current = map.get(expense.merchant) ?? {
+        savings: 0,
+        count: 0,
+        total: 0,
+      };
+      current.savings += expense.savings;
+      current.count += 1;
+      current.total += expense.amount;
+      map.set(expense.merchant, current);
+    }
+    return [...map.entries()]
+      .map(([merchant, value]) => ({ merchant, ...value }))
+      .sort((a, b) => b.savings - a.savings)
+      .slice(0, 6);
   }, [yearExpenses]);
 
   const weekdayTotals = useMemo(() => {
@@ -281,7 +322,7 @@ export function StatsView() {
           </section>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <Kpi
                 icon={Wallet}
                 label={`Total ${year}`}
@@ -302,6 +343,17 @@ export function StatsView() {
                 value={biggest ? formatEuro(biggest.amount) : "—"}
                 hint={biggest ? biggest.merchant : "—"}
                 tone="bg-amber-50 text-amber-700"
+              />
+              <Kpi
+                icon={BadgePercent}
+                label="Promos / économies"
+                value={totalSavings > 0 ? formatEuro(totalSavings) : "—"}
+                hint={
+                  totalSavings > 0
+                    ? `${savingsRate.toFixed(1).replace(".", ",")} % du total · ${savingsCount} ticket${savingsCount > 1 ? "s" : ""}`
+                    : "aucune remise"
+                }
+                tone="bg-emerald-50 text-emerald-700"
               />
               <Kpi
                 icon={Store}
@@ -514,6 +566,117 @@ export function StatsView() {
                       </li>
                     ))}
                   </ul>
+                </section>
+
+                <section className="rounded-2xl border border-stone-200/80 bg-gradient-to-br from-emerald-50/60 via-white to-amber-50/40 p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-900">
+                        <BadgePercent className="size-4 text-emerald-600" />
+                        Promos & économies globales
+                      </h2>
+                      <p className="mt-0.5 text-[12px] text-stone-600">
+                        Remises, coupons et prix barrés lus sur vos tickets en{" "}
+                        {year}.
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-semibold tabular-nums text-emerald-800">
+                        {totalSavings > 0 ? formatEuro(totalSavings) : "—"}
+                      </p>
+                      <p className="text-[11px] text-stone-500">
+                        {totalSavings > 0
+                          ? `${savingsRate.toFixed(1).replace(".", ",")} % de vos dépenses`
+                          : "aucune économie enregistrée"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {totalSavings > 0 ? (
+                    <div className="mt-5 grid gap-6 md:grid-cols-2">
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
+                          Économies par mois
+                        </p>
+                        <div
+                          className="mt-3 flex h-32 items-end gap-1.5"
+                          aria-hidden="true"
+                        >
+                          {monthlySavings.map((amount, index) => {
+                            const ratio =
+                              maxMonthlySavings > 0
+                                ? amount / maxMonthlySavings
+                                : 0;
+                            return (
+                              <div
+                                key={index}
+                                className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
+                                title={`${MONTH_LETTERS[index]} : ${formatEuro(amount)}`}
+                              >
+                                <div
+                                  className={cn(
+                                    "w-full rounded-t-md transition group-hover:bg-emerald-500",
+                                    amount === 0
+                                      ? "bg-stone-100"
+                                      : "bg-emerald-300",
+                                  )}
+                                  style={{
+                                    height:
+                                      amount === 0
+                                        ? "3px"
+                                        : `${Math.max(4, ratio * 100)}%`,
+                                  }}
+                                />
+                                <span className="text-[9px] text-stone-500">
+                                  {MONTH_LETTERS[index]}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <ul className="sr-only">
+                          {monthlySavings.map((amount, index) => (
+                            <li key={index}>
+                              {MONTH_NAMES[index]} : {formatEuro(amount)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
+                          Magasins qui font économiser
+                        </p>
+                        <ul className="mt-3 space-y-2.5">
+                          {savingsMerchants.map((item) => (
+                            <li
+                              key={item.merchant}
+                              className="flex items-center justify-between gap-3 text-[12px]"
+                            >
+                              <span className="flex min-w-0 items-center gap-2 text-stone-700">
+                                <span className="grid size-5 shrink-0 place-items-center rounded-md bg-emerald-100 text-emerald-700">
+                                  <BadgePercent className="size-2.5" />
+                                </span>
+                                <span className="truncate">{item.merchant}</span>
+                                <span className="shrink-0 text-[10px] text-stone-500">
+                                  {item.count} ticket{item.count > 1 ? "s" : ""}
+                                </span>
+                              </span>
+                              <span className="shrink-0 font-medium tabular-nums text-emerald-800">
+                                {formatEuro(item.savings)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-[12px] leading-relaxed text-stone-600">
+                      Les remises sont détectées automatiquement dans le détail
+                      des articles. Vous pouvez aussi ajouter une ligne
+                      « Remise » en modifiant un ticket.
+                    </p>
+                  )}
                 </section>
               </div>
 

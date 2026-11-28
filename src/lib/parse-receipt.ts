@@ -1,4 +1,9 @@
-import type { Category, ParsedReceipt, PaymentMethod } from "./types";
+import type {
+  Category,
+  ParsedReceipt,
+  PaymentMethod,
+  ReceiptItem,
+} from "./types";
 import { todayISO } from "./format";
 
 /**
@@ -22,11 +27,12 @@ const FRENCH_MONTHS: Record<string, number> = {
   DECEMBRE: 12,
 };
 
-const AMOUNT_RE = /(-?\d{1,3}(?:[ .]\d{3})*[,.]\d{2})(?!\d)(?!\s*%)/g;
+const AMOUNT_RE =
+  /(-?\d{1,3}(?:[ .]\d{3})*[,.]\d{2})(?!\d)(?!\s*%)/g;
 
 const TVA_PATTERN = /T\.?\s?V\.?\s?A\.?/;
 const TVA_TOTAL_PATTERN =
-  /(?:TOTAL|DONT|MONTANT|TAXE)\s*(?:DE\s*)?(?:LA\s*)?T\.?\s?V\.?\s?A\.?|T\.?\s?V\.?\s?A\.?\s*(?:TOTALE|TOTAL|AFFICHEE|DU TICKET)/;
+  /(?:TOTAL|DONT|MONTANT|TAXE)\s*(?:DE\s*)?(?:LA\s*)?T\.?\s?V\.?\s?A\.?|T\.?\s?V\.?\s?A\.?\s*(?:TOTALE|TOTAL|AFFICHEE|INCLUSE|COMPRISE|DU TICKET)/;
 
 /**
  * Certains PDF renvoient tout le ticket sur une seule ligne (ou des colonnes
@@ -121,7 +127,7 @@ function findDate(rawLines: string[]): { date: string; found: boolean } {
     }
 
     // 20/11/2026, 20.11.26, 20-11-2026
-    for (const match of line.matchAll(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/g)) {
+    for (const match of line.matchAll(/\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})\b/g)) {
       const day = Number(match[1]);
       const month = Number(match[2]);
       let year = Number(match[3]);
@@ -169,7 +175,11 @@ function totalScore(line: string): number {
   return 0;
 }
 
-function findTotal(rawLines: string[]): { amount: number | null; certain: boolean } {
+function findTotal(rawLines: string[]): {
+  amount: number | null;
+  certain: boolean;
+  index: number | null;
+} {
   type Candidate = { amount: number; score: number; index: number };
   const candidates: Candidate[] = [];
 
@@ -185,19 +195,28 @@ function findTotal(rawLines: string[]): { amount: number | null; certain: boolea
 
   if (candidates.length > 0) {
     candidates.sort((a, b) => b.score - a.score || b.index - a.index);
-    return { amount: candidates[0].amount, certain: candidates[0].score >= 2 };
+    return {
+      amount: candidates[0].amount,
+      certain: candidates[0].score >= 2,
+      index: candidates[0].index,
+    };
   }
 
   // Dernier recours : le plus gros montant du ticket (hors lignes de paiement).
-  const fallback: number[] = [];
-  rawLines.forEach((rawLine) => {
+  const fallback: { amount: number; index: number }[] = [];
+  rawLines.forEach((rawLine, index) => {
     const line = normalizeText(rawLine);
     if (TOTAL_EXCLUDED.test(line)) return;
-    fallback.push(...extractAmounts(rawLine));
+    for (const amount of extractAmounts(rawLine)) {
+      fallback.push({ amount, index });
+    }
   });
+
+  const best = fallback.sort((a, b) => b.amount - a.amount)[0];
   return {
-    amount: fallback.length > 0 ? Math.max(...fallback) : null,
+    amount: best?.amount ?? null,
     certain: false,
+    index: best?.index ?? null,
   };
 }
 
@@ -213,10 +232,6 @@ function isValidTvaAmount(amount: number, total: number | null): boolean {
   return true;
 }
 
-/**
- * Un taux de TVA français dépasse rarement 30 %. Ce contrôle évite de
- * confondre un taux (« 20,00 ») avec un montant lorsque le % a sauté à l'OCR.
- */
 function hasPlausibleTvaRate(amount: number, total: number | null): boolean {
   if (total === null) return true;
   const base = total - amount;
@@ -225,93 +240,233 @@ function hasPlausibleTvaRate(amount: number, total: number | null): boolean {
   return impliedRate >= 0.5 && impliedRate <= 30;
 }
 
+const COMMON_TVA_RATES = [5, 5.5, 10, 20];
+
+function isCommonTvaRate(value: number): boolean {
+  return COMMON_TVA_RATES.some((rate) => Math.abs(rate - value) < 0.06);
+}
+
+function tvaFromRate(total: number, rate: number): number {
+  return roundCurrency(total - total / (1 + rate / 100));
+}
+
+function matchesTvaRate(amount: number, total: number, rate: number): boolean {
+  const base = total - amount;
+  if (base <= 0) return false;
+  const implied = (amount / base) * 100;
+  return Math.abs(implied - rate) <= Math.max(1.5, rate * 0.15);
+}
+
 /**
  * La TVA est souvent présentée de trois façons :
  *   - une ligne de total : « TOTAL TVA 7,55 » ou « DONT TVA 7,55 » ;
  *   - un tableau par taux : « TVA 5,50% 0,52 » puis « TVA 20,00% 7,03 » ;
  *   - une seule ligne : « TVA 20,00% 7,03 ».
- * On privilégie le total explicite, puis on additionne les lignes du dernier
- * bloc de TVA (celui du bas du ticket), et on valide le résultat par rapport
- * au montant total pour éviter de confondre un taux avec un montant.
+ *
+ * Correctif V2 : le taux est désormais lu séparément du montant, ce qui évite
+ * de confondre « TVA 20,00 » (taux dont le montant a sauté à l'OCR) avec une
+ * TVA de 20 €. Si seul le taux est lisible et que le total est connu, la TVA
+ * est recalculée : total × taux / (100 + taux).
  */
 function findTva(rawLines: string[], total: number | null): number | null {
-  const lines = rawLines
-    .map((rawLine, index) => ({ line: normalizeText(rawLine), index }))
-    .filter(({ line }) => TVA_PATTERN.test(line));
+  type Detail = {
+    rate: number | null;
+    amount: number;
+    index: number;
+    /** Montant déduit du taux, et non lu explicitement sur le ticket. */
+    computed: boolean;
+  };
 
-  if (lines.length === 0) return null;
+  const details: Detail[] = [];
+  let explicitTotal: number | null = null;
 
-  // 1. Total de TVA explicitement indiqué.
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const { line } = lines[i];
-    if (!TVA_TOTAL_PATTERN.test(line)) continue;
-    const amounts = extractAmounts(line);
-    const amount = amounts[amounts.length - 1];
-    if (
-      amount !== undefined &&
-      isValidTvaAmount(amount, total) &&
-      hasPlausibleTvaRate(amount, total)
-    ) {
-      return roundCurrency(amount);
+  rawLines.forEach((rawLine, index) => {
+    const line = normalizeText(rawLine);
+    if (!TVA_PATTERN.test(line)) return;
+
+    const rateMatches = [
+      ...line.matchAll(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%/g),
+    ];
+    const parsedRate = rateMatches.length
+      ? parseAmount(rateMatches[rateMatches.length - 1][1])
+      : null;
+    const rate =
+      parsedRate !== null && parsedRate > 0 && parsedRate <= 30
+        ? parsedRate
+        : null;
+
+    const withoutRates = rateMatches.length
+      ? line.replace(/(\d{1,3}(?:[.,]\d{1,2})?)\s*%/g, " ")
+      : line;
+    const amounts = extractAmounts(withoutRates);
+
+    // 1. Total de TVA explicitement indiqué.
+    if (TVA_TOTAL_PATTERN.test(line)) {
+      const candidate = amounts[amounts.length - 1];
+      if (
+        candidate !== undefined &&
+        isValidTvaAmount(candidate, total) &&
+        (rate === null ||
+          total === null ||
+          matchesTvaRate(candidate, total, rate))
+      ) {
+        explicitTotal = candidate;
+        return;
+      }
     }
+
+    if (rate !== null) {
+      const candidate =
+        amounts.find(
+          (amount) =>
+            isValidTvaAmount(amount, total) &&
+            (total === null || matchesTvaRate(amount, total, rate)),
+        ) ?? amounts[amounts.length - 1];
+
+      if (
+        candidate !== undefined &&
+        isValidTvaAmount(candidate, total) &&
+        hasPlausibleTvaRate(candidate, total)
+      ) {
+        details.push({ rate, amount: candidate, index, computed: false });
+        return;
+      }
+
+      if (total !== null) {
+        details.push({
+          rate,
+          amount: tvaFromRate(total, rate),
+          index,
+          computed: true,
+        });
+      }
+      return;
+    }
+
+    if (amounts.length >= 2) {
+      const first = amounts[0];
+      const last = amounts[amounts.length - 1];
+      if (
+        isCommonTvaRate(first) &&
+        isValidTvaAmount(last, total) &&
+        (total === null || matchesTvaRate(last, total, first))
+      ) {
+        details.push({ rate: first, amount: last, index, computed: false });
+        return;
+      }
+    }
+
+    if (amounts.length === 0) {
+      const bare = /\b(\d{1,2})\b/.exec(
+        line.replace(TVA_PATTERN, " ").replace(/TOTALE?|AFFICHEE|INCLUSE|COMPRISE/g, " "),
+      );
+      const bareRate = bare ? Number(bare[1]) : null;
+      if (
+        bareRate !== null &&
+        isCommonTvaRate(bareRate) &&
+        total !== null
+      ) {
+        details.push({
+          rate: bareRate,
+          amount: tvaFromRate(total, bareRate),
+          index,
+          computed: true,
+        });
+      }
+      return;
+    }
+
+    const value = amounts[amounts.length - 1];
+    if (value === undefined) return;
+
+    // Un nombre isolé qui ressemble à un taux (5, 5,5, 10, 20) est un taux,
+    // pas un montant : on le recalcule à partir du total TTC.
+    if (rate === null && isCommonTvaRate(value) && value >= 5) {
+      if (total !== null) {
+        details.push({
+          rate: value,
+          amount: tvaFromRate(total, value),
+          index,
+          computed: true,
+        });
+      }
+      // Sans total, impossible de distinguer un taux d'un montant : on
+      // préfère ne rien proposer plutôt qu'une TVA fausse.
+      return;
+    }
+
+    if (isValidTvaAmount(value, total) && hasPlausibleTvaRate(value, total)) {
+      details.push({ rate: null, amount: value, index, computed: false });
+    }
+  });
+
+  if (
+    explicitTotal !== null &&
+    isValidTvaAmount(explicitTotal, total) &&
+    hasPlausibleTvaRate(explicitTotal, total)
+  ) {
+    return roundCurrency(explicitTotal);
   }
 
-  // 2. Dernier bloc de lignes de TVA (souvent le tableau récapitulatif).
-  const recent = lines.filter(({ index }) => index >= rawLines.length - 15);
-  const pool = recent.length > 0 ? recent : lines;
+  if (details.length === 0) return null;
 
-  const groups: (typeof pool)[] = [];
-  for (const entry of pool) {
+  // On ne garde que le dernier bloc de lignes de TVA : c'est le tableau
+  // récapitulatif du bas de ticket. Cela évite de compter deux fois un même
+  // taux affiché à la fois en haut et en bas.
+  const groups: Detail[][] = [];
+  for (const detail of details) {
     const current = groups[groups.length - 1];
     const previous = current?.[current.length - 1];
-    if (current && previous && entry.index - previous.index <= 2) {
-      current.push(entry);
+    if (current && previous && detail.index - previous.index <= 2) {
+      current.push(detail);
     } else {
-      groups.push([entry]);
+      groups.push([detail]);
     }
   }
 
-  const lastGroup = groups[groups.length - 1] ?? [];
-  const detailAmounts = lastGroup
-    .map(({ line }) => {
-      const amounts = extractAmounts(line);
-      return amounts[amounts.length - 1];
-    })
-    .filter(
-      (amount): amount is number =>
-        amount !== undefined && isValidTvaAmount(amount, total),
-    );
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index];
+    const byRate = new Map<number, { amount: number; computed: boolean }>();
+    const unrated: number[] = [];
 
-  if (detailAmounts.length === 1 && hasPlausibleTvaRate(detailAmounts[0], total)) {
-    return roundCurrency(detailAmounts[0]);
-  }
+    for (const detail of group) {
+      if (detail.rate === null) {
+        unrated.push(detail.amount);
+        continue;
+      }
 
-  if (detailAmounts.length > 1) {
+      const existing = byRate.get(detail.rate);
+      if (!existing) {
+        byRate.set(detail.rate, {
+          amount: detail.amount,
+          computed: detail.computed,
+        });
+      } else if (existing.computed && !detail.computed) {
+        // Un montant réellement lu est plus fiable qu'un montant recalculé
+        // depuis le taux (ligne « TVA 20 % » sans montant).
+        byRate.set(detail.rate, {
+          amount: detail.amount,
+          computed: false,
+        });
+      } else if (!existing.computed && !detail.computed) {
+        byRate.set(detail.rate, {
+          amount: roundCurrency(existing.amount + detail.amount),
+          computed: false,
+        });
+      } else if (existing.computed && detail.computed) {
+        byRate.set(detail.rate, detail);
+      }
+    }
+
     const sum = roundCurrency(
-      detailAmounts.reduce((totalTva, amount) => totalTva + amount, 0),
+      [...byRate.values()].reduce(
+        (totalTva, detail) => totalTva + detail.amount,
+        0,
+      ) + unrated.reduce((totalTva, amount) => totalTva + amount, 0),
     );
-    if (
-      isValidTvaAmount(sum, total) &&
-      hasPlausibleTvaRate(sum, total)
-    ) {
+
+    if (isValidTvaAmount(sum, total) && hasPlausibleTvaRate(sum, total)) {
       return sum;
-    }
-  }
-
-  // Un bloc de TVA existe mais son total est incohérent : mieux vaut ne rien
-  // proposer qu'un montant partiel. L'utilisateur pourra le saisir lui-même.
-  if (detailAmounts.length > 0) return null;
-
-  // 3. Dernière ligne de TVA valable, même isolée.
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const amounts = extractAmounts(lines[i].line);
-    const amount = amounts[amounts.length - 1];
-    if (
-      amount !== undefined &&
-      isValidTvaAmount(amount, total) &&
-      hasPlausibleTvaRate(amount, total)
-    ) {
-      return roundCurrency(amount);
     }
   }
 
@@ -583,12 +738,347 @@ function findPayment(fullText: string): PaymentMethod {
     return "Carte bancaire";
   }
   if (/\b(ESPECES|LIQUIDE|CASH)\b/.test(normalized)) return "Espèces";
-  if (/\bCHEQUE\b/.test(normalized)) return "Chèque";
-  if (/\bVIREMENT\b/.test(normalized)) return "Virement";
+  if (/\b(CHEQUE)\b/.test(normalized)) return "Chèque";
+  if (/\b(VIREMENT)\b/.test(normalized)) return "Virement";
   return "Carte bancaire";
 }
 
-export function parseReceipt(text: string): ParsedReceipt {
+/* ------------------------------------------------------------------ */
+/* Détail des articles                                                */
+/* ------------------------------------------------------------------ */
+
+const ITEM_CATEGORY_RULES: { category: Category; pattern: RegExp }[] = [
+  {
+    category: "Carburant",
+    pattern:
+      /\b(GASOIL|ESSENCE|SP95|SP98|E10|E85|GPL|CARBURANT|DIESEL|ADBLUE|POMPE|LITRE)\b/,
+  },
+  {
+    category: "Abonnements",
+    pattern:
+      /\b(ABONNEMENT|FORFAIT|NETFLIX|SPOTIFY|DISNEY|CANAL|PRIME VIDEO|YOUTUBE|APPLE|ICLOUD|GOOGLE ONE|MICROSOFT|OFFICE 365|ORANGE|SFR|BOUYGUES|FREE|INTERNET|MOBILE|TELEPHONE)\b/,
+  },
+  {
+    category: "Transport",
+    pattern:
+      /\b(SNCF|RATP|TGV|OUIGO|TER|BUS|METRO|TRAM|PEAGE|AUTOROUTE|PARKING|NAVIGO|BILLET|TRAIN|AVION|UBER|BOLT|CARBURANT)\b/,
+  },
+  {
+    category: "Santé",
+    pattern:
+      /\b(PHARMACIE|MEDICAMENT|DOLIPRANE|PARACETAMOL|SPASFON|VITAMINE|COMPLEMENT|MASQUE|TEST|OPTIQUE|LUNETTES|PANSEMENT|SIROP|SERUM PHYSIOLOGIQUE)\b/,
+  },
+  {
+    category: "Logement",
+    pattern:
+      /\b(LESSIVE|DETERGENT|NETTOYANT|EAU DE JAVEL|PAPIER TOILETTE|ESSUIE TOUT|AMPOULE|PILE|BOULON|BRICOLAGE|PEINTURE|JARDIN|PLANTE|TERREAU|LOYER|ELECTRICITE|GAZ|ASSURANCE|CHAUFFAGE|MEUBLE|VAISSELLE|SAC POUBELLE|EPONGE)\b/,
+  },
+  {
+    category: "Loisirs",
+    pattern:
+      /\b(CINEMA|UGC|PATHE|GAUMONT|MUSEE|THEATRE|FITNESS|PISCINE|LOISIR|JEUX|JOUET|JEU|LIVRE|BD|MAGAZINE)\b/,
+  },
+  {
+    category: "Shopping",
+    pattern:
+      /\b(VETEMENT|CHAUSSURE|CHAUSSURES|MEUBLE|JOUET|LIBRAIRIE|CADEAU|BIJOU|SAC|COSMETIQUE|PARFUM|MAQUILLAGE|SHAMPOO|SAVON|DENTIFRICE|DEODORANT|RASOIR|COUCHES|PILE)\b/,
+  },
+  {
+    category: "Alimentation",
+    pattern:
+      /\b(PAIN|BAGUETTE|CROISSANT|LAIT|BEURRE|OEUF|OEUFS|FROMAGE|YAOURT|FRUIT|LEGUME|VIANDE|POULET|POISSON|PATE|RIZ|CAFE|THE|EAU|JUS|SODA|BISCUIT|CHOCOLAT|CEREALE|CONSERVE|HUILE|SUCRE|FARINE|SALADE|TOMATE|POMME|BANANE|COMPOTE|SURGELE|PIZZA|LAITIER|CREME FRAICHE|EPICE|SAUCE|CONFITURE|MIEL|VIN|BIERE)\b/,
+  },
+];
+
+const NON_ITEM_START =
+  /^(?:TOTAL|SOUS[ -]?TOTAL|MONTANT|NET A PAYER|A PAYER|RENDU|MONNAIE|CARTE|CB|ESPECES|ESPECES|CHEQUE|VIREMENT|PAIEMENT|POURBOIRE|ARRONDI|SOLDE|ANCIEN|TICKET|DATE|HEURE|CAISSE|CLIENT|MERCI|SIRET|SIREN|TVA|DONT|POINTS|NOMBRE|NB|ARTICLES|HT|TTC|BASE|TAUX)\b/;
+
+const DISCOUNT_KEYWORD =
+  /\b(REMISE|REDUCTION|REDUC|ECONOMIE|ECO|AVANTAGE|COUPON|OFFERT|GRATUIT|SOLDE|DEDUCTION|DEDUIT|FIDELITE|CAGNOTTE|BON DE REDUCTION|BON D'ACHAT)\b/;
+
+const TICKET_SAVINGS =
+  /\b(VOUS AVEZ (?:ECONOMISE|GAGNE)|TOTAL (?:ECONOMIES?|REMISES?)|ECONOMIES? (?:REALISEES?|TOTALES?)|CUMUL (?:ECONOMIES?|REMISES?)|DONT (?:REMISE|ECONOMIE))\b/;
+
+const TRAILING_AMOUNT_RE =
+  /(-?\d{1,4}(?:[ .]\d{3})*[,.]\d{2})\s*(?:€|EUR)?\s*([A-Z])?\s*$/i;
+
+const DATE_IN_LINE_RE =
+  /\b(?:\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|20\d{2}[/.\-]\d{1,2}[/.\-]\d{1,2})\b/;
+
+function cleanItemLabel(value: string): string {
+  return value
+    .replace(/^\s*[*\-–—•·]+\s*/, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s.:;,\-–—]+|[\s.:;,\-–—]+$/g, "")
+    .trim();
+}
+
+function removeAmounts(value: string): string {
+  return value.replace(AMOUNT_RE, " ");
+}
+
+function parseQuantity(rawLabel: string): { quantity: number; label: string } {
+  let quantity = 1;
+  let label = rawLabel;
+
+  const patterns = [
+    /\b(\d{1,3})\s*[xX×]\s*/,
+    /\b(?:QTE|QTY|QUANTITE)\s*[:.]?\s*(\d{1,3})\b/i,
+    /\b(\d{1,3})\s*(?:PIECES?|PCS?|UNITES?)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(label);
+    if (!match) continue;
+    quantity = Number(match[1]);
+    label = `${label.slice(0, match.index)} ${label.slice(match.index + match[0].length)}`;
+    break;
+  }
+
+  return { quantity, label };
+}
+
+function classifyItem(
+  label: string,
+  ticketCategory: Category,
+  defaultCategory: Category,
+): Category {
+  const normalized = normalizeText(label);
+  for (const entry of ITEM_CATEGORY_RULES) {
+    // Dans un restaurant, « CAFE » ou « SALADE » sont des plats, pas des
+    // courses : on laisse la catégorie du ticket prendre le relais.
+    if (entry.category === "Alimentation" && ticketCategory === "Restaurants") {
+      continue;
+    }
+    if (entry.pattern.test(normalized)) return entry.category;
+  }
+  // Le contexte du ticket reste le meilleur indice : une pharmacie vend
+  // rarement des articles « Divers ». La catégorie par défaut ne sert qu'en
+  // dernier recours.
+  if (ticketCategory !== "Divers") return ticketCategory;
+  return defaultCategory;
+}
+
+function normalizeBoldLines(boldLines: string[] | undefined): string[] {
+  if (!boldLines?.length) return [];
+  return boldLines
+    .map((line) => normalizeText(line).replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 3);
+}
+
+function isBoldLine(
+  rawLine: string,
+  label: string,
+  boldLines: string[],
+): boolean {
+  if (boldLines.length === 0) return false;
+  const normalizedLine = normalizeText(rawLine).replace(/\s+/g, " ").trim();
+  const normalizedLabel = normalizeText(label).replace(/\s+/g, " ").trim();
+  if (!normalizedLabel) return false;
+
+  return boldLines.some(
+    (bold) =>
+      bold === normalizedLine ||
+      bold === normalizedLabel ||
+      (normalizedLabel.length >= 4 && bold.includes(normalizedLabel)) ||
+      (bold.length >= 4 && normalizedLine.includes(bold)),
+  );
+}
+
+function extractItems(
+  rawLines: string[],
+  total: number | null,
+  ticketCategory: Category,
+  defaultCategory: Category,
+  boldLines: string[],
+  excludeTotalIndex: number | null,
+): {
+  items: ReceiptItem[];
+  ticketSavings: number;
+  warnings: string[];
+} {
+  const collected: { item: ReceiptItem; index: number }[] = [];
+  const warnings: string[] = [];
+  let ticketSavings = 0;
+
+  for (let lineIndex = 0; lineIndex < rawLines.length; lineIndex += 1) {
+    const rawLine = rawLines[lineIndex];
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const normalized = normalizeText(line);
+    if (DATE_IN_LINE_RE.test(line)) continue;
+    if (TVA_PATTERN.test(normalized)) continue;
+
+    const trailing = TRAILING_AMOUNT_RE.exec(line);
+    if (!trailing || trailing.index === undefined) continue;
+
+    const rawAmount = parseAmount(trailing[1]);
+    if (rawAmount === null) continue;
+    const amount = roundCurrency(Math.abs(rawAmount));
+    if (amount <= 0 || amount > 10_000) continue;
+
+    const isNegative = trailing[1].trim().startsWith("-");
+    const rawLabel = line.slice(0, trailing.index);
+    if (!/[a-zA-ZÀ-ÿ]/.test(rawLabel)) continue;
+
+    const cleanedRawLabel = cleanItemLabel(rawLabel);
+    const normalizedLabel = normalizeText(cleanedRawLabel);
+
+    if (TICKET_SAVINGS.test(normalizedLabel)) {
+      ticketSavings = Math.max(ticketSavings, amount);
+      continue;
+    }
+
+    const isDiscount = isNegative || DISCOUNT_KEYWORD.test(normalizedLabel);
+    if (!isDiscount) {
+      if (NON_ITEM_START.test(normalizedLabel)) continue;
+      if (MERCHANT_NOISE.test(normalizedLabel)) continue;
+      if (STREET_NOISE.test(normalizedLabel)) continue;
+      if (/\b(?:TEL|TELEPHONE|SIRET|SIREN|RCS|APE|NAF)\b/.test(normalizedLabel)) {
+        continue;
+      }
+    }
+
+    const quantityInfo = parseQuantity(cleanedRawLabel);
+    let label = cleanItemLabel(removeAmounts(quantityInfo.label));
+
+    // Un code fiscal isolé (A, B, C) reste parfois collé au libellé.
+    label = label.replace(/\s+[A-Z]$/i, "").trim();
+
+    if (label.length < 2 || !/[a-zA-ZÀ-ÿ]/.test(label)) continue;
+    if (label.length > 90) label = `${label.slice(0, 87).trim()}…`;
+
+    if (!isDiscount) {
+      if (NON_ITEM_START.test(normalizeText(label))) continue;
+      if (MERCHANT_NOISE.test(normalizeText(label))) continue;
+      if (STREET_NOISE.test(normalizeText(label))) continue;
+    }
+
+    const amounts = extractAmounts(line);
+    let quantity = quantityInfo.quantity;
+    let unitPrice: number | null = null;
+
+    if (quantity > 1 && amounts.length >= 2) {
+      const candidate = amounts[0];
+      if (Math.abs(candidate * quantity - amount) <= 0.05) {
+        unitPrice = roundCurrency(candidate);
+      } else {
+        unitPrice = roundCurrency(amount / quantity);
+      }
+    } else if (quantity > 1) {
+      unitPrice = roundCurrency(amount / quantity);
+    } else if (amounts.length >= 2) {
+      const ratio = amount / amounts[0];
+      const rounded = Math.round(ratio);
+      if (
+        rounded >= 2 &&
+        rounded <= 20 &&
+        Math.abs(ratio - rounded) <= 0.03
+      ) {
+        quantity = rounded;
+        unitPrice = roundCurrency(amounts[0]);
+      } else if (amounts[0] > amount) {
+        unitPrice = roundCurrency(amounts[0]);
+      }
+    }
+
+    if (!unitPrice) unitPrice = roundCurrency(amount / Math.max(1, quantity));
+
+    const tvaMatch = [...line.matchAll(/(\d{1,2}(?:[.,]\d{1,2})?)\s*%/g)];
+    const tvaRate = tvaMatch.length
+      ? parseAmount(tvaMatch[tvaMatch.length - 1][1])
+      : null;
+    const normalisedRate =
+      tvaRate !== null && tvaRate > 0 && tvaRate <= 30 ? tvaRate : null;
+    const tva =
+      !isDiscount && normalisedRate !== null
+        ? roundCurrency(amount - amount / (1 + normalisedRate / 100))
+        : null;
+
+    // Prix barré / remise sur la ligne : « PROMO 5,00 4,00 ».
+    let savings = 0;
+    if (isDiscount) {
+      savings = amount;
+    } else if (
+      /\b(PROMO|REMISE|REDUCTION|OFFRE|AVANTAGE)\b/.test(normalizedLabel) &&
+      amounts.length >= 2 &&
+      amounts[0] > amount
+    ) {
+      savings = roundCurrency(amounts[0] - amount);
+    }
+
+    collected.push({
+      index: lineIndex,
+      item: {
+        label,
+        category: classifyItem(label, ticketCategory, defaultCategory),
+        quantity: isDiscount ? 1 : quantity,
+        unitPrice: isDiscount ? null : unitPrice,
+        amount,
+        tva,
+        tvaRate: normalisedRate,
+        savings,
+        bold: isBoldLine(line, label, boldLines),
+        kind: isDiscount ? "discount" : "item",
+      },
+    });
+  }
+
+  // La ligne qui a servi à trouver le total ne doit pas devenir un article :
+  // c'est fréquent quand l'OCR lit « Torai ic » à la place de « TOTAL TTC ».
+  let items = collected.map((entry) => entry.item);
+  if (
+    excludeTotalIndex !== null &&
+    collected.some((entry) => entry.index !== excludeTotalIndex)
+  ) {
+    items = collected
+      .filter((entry) => entry.index !== excludeTotalIndex)
+      .map((entry) => entry.item);
+  }
+
+  if (items.length === 0) {
+    warnings.push(
+      "Le détail des articles n'a pas pu être lu. Vous pouvez le compléter à la main.",
+    );
+  } else if (total !== null) {
+    const itemsTotal = roundCurrency(
+      items.reduce(
+        (sum, item) =>
+          item.kind === "discount" ? sum - item.amount : sum + item.amount,
+        0,
+      ),
+    );
+    const difference = roundCurrency(total - itemsTotal);
+    if (Math.abs(difference) >= 0.06) {
+      warnings.push(
+        `La somme des articles (${itemsTotal.toFixed(2).replace(".", ",")} €) diffère du total (${total.toFixed(2).replace(".", ",")} €). Vérifiez les lignes.`,
+      );
+    }
+  }
+
+  return {
+    items: items.slice(0, 150),
+    ticketSavings,
+    warnings,
+  };
+}
+
+function computeItemSavings(items: ReceiptItem[]): number {
+  return roundCurrency(items.reduce((sum, item) => sum + item.savings, 0));
+}
+
+export type ParseReceiptOptions = {
+  /** Catégorie choisie par l'utilisateur, utilisée si aucun indice n'est trouvé. */
+  defaultCategory?: Category;
+  /** Lignes détectées en gras dans le PDF ou par l'OCR. */
+  boldLines?: string[];
+};
+
+export function parseReceipt(
+  text: string,
+  options: ParseReceiptOptions = {},
+): ParsedReceipt {
   const rawLines = splitRawLines(text);
 
   const cleanedText = rawLines.join("\n");
@@ -604,6 +1094,21 @@ export function parseReceipt(text: string): ParsedReceipt {
   const payment = findPayment(cleanedText);
 
   const category = findCategory(cleanedText, merchant, merchantMatch.category);
+  const defaultCategory = options.defaultCategory ?? "Divers";
+  const boldLines = normalizeBoldLines(options.boldLines);
+
+  const itemResult = extractItems(
+    rawLines,
+    amount,
+    category,
+    defaultCategory,
+    boldLines,
+    total.index,
+  );
+  const savings = Math.max(
+    computeItemSavings(itemResult.items),
+    itemResult.ticketSavings,
+  ) || 0;
 
   const warnings: string[] = [];
   if (normalized.length < 80) {
@@ -617,6 +1122,7 @@ export function parseReceipt(text: string): ParsedReceipt {
   else if (!total.certain) {
     warnings.push("Montant estimé : le total n'a pas été identifié avec certitude.");
   }
+  warnings.push(...itemResult.warnings);
 
   return {
     date,
@@ -627,6 +1133,9 @@ export function parseReceipt(text: string): ParsedReceipt {
     amount,
     tva,
     payment,
+    items: itemResult.items,
+    savings,
+    ticketSavings: itemResult.ticketSavings,
     note: "",
     warnings,
     rawText: cleanedText.slice(0, 4000),

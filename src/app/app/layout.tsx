@@ -5,8 +5,9 @@ import { getSession, isGoogleConfigured } from "@/lib/session";
 import { getAuthClient } from "@/lib/google";
 import { ensureWorkspace, readExpenses } from "@/lib/sheet";
 import { DEFAULT_SETTINGS, readSettings, type AppSettings } from "@/lib/settings";
+import { defaultProfile, readProfile } from "@/lib/profile";
 import { describeGoogleError } from "@/lib/google-errors";
-import type { Expense } from "@/lib/types";
+import type { Expense, UserProfile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function AppLayout({
 
   let expenses: Expense[] = [];
   let settings: AppSettings = DEFAULT_SETTINGS;
+  let profile: UserProfile = defaultProfile(session.user);
   let sheetUrl = "";
   let folderId = "";
   let error: string | null = null;
@@ -31,12 +33,17 @@ export default async function AppLayout({
     const workspace = await ensureWorkspace(auth);
     sheetUrl = workspace.spreadsheetUrl;
     folderId = workspace.folderId;
-    const [rows, loadedSettings] = await Promise.all([
+    const [rows, loadedSettings, loadedProfile] = await Promise.all([
       readExpenses(auth, workspace.spreadsheetId),
       readSettings(auth, workspace.folderId),
+      readProfile(auth, workspace.folderId, session.user).catch((profileError) => {
+        console.error("Chargement du profil impossible :", profileError);
+        return defaultProfile(session.user!);
+      }),
     ]);
     expenses = rows;
     settings = loadedSettings;
+    profile = loadedProfile;
   } catch (err) {
     console.error("Chargement de l'espace de travail impossible :", err);
     error = describeGoogleError(err);
@@ -46,6 +53,7 @@ export default async function AppLayout({
     <WorkspaceProvider
       initial={{
         user: session.user,
+        profile,
         expenses,
         settings,
         sheetUrl,
@@ -58,7 +66,7 @@ export default async function AppLayout({
         tabIndex={-1}
         className="min-h-screen bg-stone-50 pb-safe-nav outline-none md:pb-0"
       >
-        <AppHeader user={session.user} sheetUrl={sheetUrl} />
+        <AppHeader user={session.user} profile={profile} sheetUrl={sheetUrl} />
         {children}
       </div>
     </WorkspaceProvider>
