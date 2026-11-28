@@ -265,11 +265,11 @@ export function BatchImportDialog({
 
                 {(row.items.length > 0 || row.savings > 0) && (
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-stone-500">
-                    {row.items.length > 0 && (
+                    {row.items.filter((item) => item.kind !== "discount").length > 0 && (
                       <span className="inline-flex items-center gap-1">
                         <ReceiptText className="size-2.5" />
-                        {row.items.length} article
-                        {row.items.length > 1 ? "s" : ""}
+                        {row.items.filter((item) => item.kind !== "discount").length} article
+                        {row.items.filter((item) => item.kind !== "discount").length > 1 ? "s" : ""}
                       </span>
                     )}
                     {row.savings > 0 && (

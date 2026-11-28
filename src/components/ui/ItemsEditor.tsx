@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Bold,
   BadgePercent,
@@ -20,7 +20,9 @@ type EditableItem = {
   key: string;
   label: string;
   category: Category;
+  section?: string;
   quantity: string;
+  unit?: string;
   unitPrice: string;
   amount: string;
   tva: number | null;
@@ -42,7 +44,9 @@ function toEditable(item: ReceiptItem): EditableItem {
     key: nextKey(),
     label: item.label,
     category: item.category,
-    quantity: String(item.quantity || 1),
+    section: item.section,
+    quantity: formatQuantity(item.quantity),
+    unit: item.unit,
     unitPrice:
       item.unitPrice !== null
         ? item.unitPrice.toFixed(2).replace(".", ",")
@@ -56,8 +60,21 @@ function toEditable(item: ReceiptItem): EditableItem {
   };
 }
 
+function formatQuantity(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value
+    .toFixed(3)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "")
+    .replace(".", ",");
+}
+
 function fromEditable(row: EditableItem): ReceiptItem {
-  const quantity = Math.max(1, Math.round(parseAmountInput(row.quantity) ?? 1));
+  const quantityInput = parseAmountInput(row.quantity);
+  const quantity =
+    quantityInput !== null && quantityInput > 0
+      ? Math.max(0.001, Math.min(999, Math.round(quantityInput * 1000) / 1000))
+      : 1;
   const amountInput = parseAmountInput(row.amount);
   const unitInput = parseAmountInput(row.unitPrice);
 
@@ -84,7 +101,9 @@ function fromEditable(row: EditableItem): ReceiptItem {
   return {
     label: row.label.trim() || "Article",
     category: row.category,
+    section: row.section,
     quantity,
+    unit: row.unit,
     unitPrice,
     amount,
     tva,
@@ -142,11 +161,19 @@ export function ItemsEditor({
   }
 
   function addItem(kind: ReceiptItemKind) {
+    const lastItemSection =
+      kind === "discount"
+        ? undefined
+        : [...rows]
+            .reverse()
+            .find((row) => row.kind !== "discount")?.section;
     const row: EditableItem = {
       key: nextKey(),
       label: kind === "discount" ? "Remise" : "Nouvel article",
       category: defaultCategory,
+      section: kind === "discount" ? "Réductions" : lastItemSection,
       quantity: "1",
+      unit: undefined,
       unitPrice: "",
       amount: "",
       tva: null,
@@ -165,6 +192,10 @@ export function ItemsEditor({
   const currentItems = rows
     .map(fromEditable)
     .filter((item) => item.amount > 0);
+  const purchaseCount = currentItems.filter(
+    (item) => item.kind !== "discount",
+  ).length;
+  const discountCount = currentItems.length - purchaseCount;
   const total = itemsTotal(currentItems);
   const savings = currentItems.reduce((sum, item) => sum + item.savings, 0);
   const tva = currentItems.reduce((sum, item) => sum + (item.tva ?? 0), 0);
@@ -184,7 +215,10 @@ export function ItemsEditor({
               Détail des articles
             </h3>
             <p className="text-[10.5px] text-stone-500">
-              {currentItems.length} ligne{currentItems.length > 1 ? "s" : ""}
+              {purchaseCount} article{purchaseCount > 1 ? "s" : ""}
+              {discountCount > 0
+                ? ` · ${discountCount} remise${discountCount > 1 ? "s" : ""}`
+                : ""}
               {savings > 0 ? ` · ${formatEuro(savings)} économisés` : ""}
               {tva > 0 ? ` · TVA ${formatEuro(tva)}` : ""}
             </p>
@@ -220,11 +254,21 @@ export function ItemsEditor({
         </div>
       ) : (
         <ul className="divide-y divide-stone-200/70">
-          {rows.map((row) => {
+          {rows.map((row, rowIndex) => {
             const editableItem = fromEditable(row);
             const isDiscount = row.kind === "discount";
+            const previousSection = rows[rowIndex - 1]?.section;
+            const showSection = Boolean(
+              row.section && row.section !== previousSection,
+            );
             return (
-              <li key={row.key} className="px-3 py-2.5">
+              <Fragment key={row.key}>
+                {showSection && (
+                  <li className="bg-stone-100/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                    {row.section}
+                  </li>
+                )}
+                <li className="px-3 py-2.5">
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_58px_92px_92px_148px_auto] sm:items-center">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <button
@@ -269,13 +313,13 @@ export function ItemsEditor({
                     <span className="sr-only">Quantité</span>
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       value={row.quantity}
                       onChange={(event) =>
                         updateRow(row.key, { quantity: event.target.value })
                       }
                       className={cn(fieldCompactClass, "px-1.5 text-center tabular-nums")}
-                      aria-label="Quantité"
+                      aria-label={row.unit ? `Quantité en ${row.unit}` : "Quantité"}
                     />
                   </label>
 
@@ -355,11 +399,13 @@ export function ItemsEditor({
 
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-9 text-[10px] text-stone-500">
                   {editableItem.kind !== "discount" &&
-                    editableItem.quantity > 1 &&
+                    editableItem.quantity !== 1 &&
                     editableItem.unitPrice !== null && (
                       <span>
-                        {editableItem.quantity} ×{" "}
-                        {formatEuro(editableItem.unitPrice)} ={" "}
+                        {formatQuantity(editableItem.quantity)}
+                        {editableItem.unit ? ` ${editableItem.unit}` : ""} ×{" "}
+                        {formatEuro(editableItem.unitPrice)}
+                        {editableItem.unit ? `/${editableItem.unit}` : ""} ={" "}
                         {formatEuro(editableItem.amount)}
                       </span>
                     )}
@@ -373,7 +419,8 @@ export function ItemsEditor({
                     </span>
                   )}
                 </div>
-              </li>
+                </li>
+              </Fragment>
             );
           })}
         </ul>

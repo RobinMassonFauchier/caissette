@@ -38,6 +38,10 @@ const SORT_LABELS: Record<SortKey, string> = {
   "savings-desc": "Plus d'économies",
 };
 
+function purchaseItemCount(expense: Expense): number {
+  return expense.items.filter((item) => item.kind !== "discount").length;
+}
+
 export function ExpenseTable({
   expenses,
   onAdd,
@@ -416,9 +420,9 @@ export function ExpenseTable({
                       >
                         {expense.category}
                       </span>
-                      {expense.items.length > 0 && (
+                      {purchaseItemCount(expense) > 0 && (
                         <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600">
-                          {expense.items.length} art.
+                          {purchaseItemCount(expense)} art.
                         </span>
                       )}
                       {expense.savings > 0 && (
@@ -522,11 +526,11 @@ export function ExpenseTable({
                             {expense.note}
                           </p>
                         )}
-                        {expense.items.length > 0 && (
+                        {purchaseItemCount(expense) > 0 && (
                           <span className="inline-flex items-center gap-0.5 text-[10px] text-stone-500">
                             <ReceiptText className="size-2.5" />
-                            {expense.items.length} article
-                            {expense.items.length > 1 ? "s" : ""}
+                            {purchaseItemCount(expense)} article
+                            {purchaseItemCount(expense) > 1 ? "s" : ""}
                           </span>
                         )}
                         {expense.savings > 0 && (

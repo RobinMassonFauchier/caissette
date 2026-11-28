@@ -118,12 +118,25 @@ function findDate(rawLines: string[]): { date: string; found: boolean } {
 
   rawLines.forEach((rawLine, index) => {
     const line = normalizeText(rawLine);
-    const dateHint = /\bDATE\b/.test(line) ? 4 : 0;
+    const nearbyDateLabel = rawLines
+      .slice(Math.max(0, index - 2), index + 1)
+      .some((candidate) => /\bDATE\b/.test(normalizeText(candidate)));
+    const dateHint = nearbyDateLabel ? 4 : 0;
+    // La date de transaction est presque toujours en haut du ticket ; les
+    // dates des encarts publicitaires en bas ne doivent pas prendre le dessus.
+    const positionBonus =
+      index <= 12 ? 2 : index > rawLines.length - 15 ? -2 : 0;
 
     // 2026-11-20
     for (const match of line.matchAll(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/g)) {
       const iso = toISO(Number(match[1]), Number(match[2]), Number(match[3]));
-      if (iso) candidates.push({ date: iso, score: dateHint + 3, index });
+      if (iso) {
+        candidates.push({
+          date: iso,
+          score: dateHint + positionBonus + 3,
+          index,
+        });
+      }
     }
 
     // 20/11/2026, 20.11.26, 20-11-2026
@@ -133,7 +146,13 @@ function findDate(rawLines: string[]): { date: string; found: boolean } {
       let year = Number(match[3]);
       if (match[3].length === 2) year += year < 80 ? 2000 : 1900;
       const iso = toISO(year, month, day);
-      if (iso) candidates.push({ date: iso, score: dateHint + 2, index });
+      if (iso) {
+        candidates.push({
+          date: iso,
+          score: dateHint + positionBonus + 2,
+          index,
+        });
+      }
     }
 
     // 20 NOVEMBRE 2026
@@ -145,7 +164,13 @@ function findDate(rawLines: string[]): { date: string; found: boolean } {
         FRENCH_MONTHS[match[2]],
         Number(match[1]),
       );
-      if (iso) candidates.push({ date: iso, score: dateHint + 3, index });
+      if (iso) {
+        candidates.push({
+          date: iso,
+          score: dateHint + positionBonus + 3,
+          index,
+        });
+      }
     }
   });
 
@@ -162,7 +187,7 @@ function findDate(rawLines: string[]): { date: string; found: boolean } {
 }
 
 const TOTAL_EXCLUDED =
-  /(TVA|H\.?T\b|SOUS[ -]?TOTAL|ARTICLES|REMISE|REDUCTION|ECONOMIE|FIDELITE|DONT|CARTE|ESPECES|RENDU|MONNAIE|CHEQUE|SOLDE|ANCIEN|AVANT|POINTS|NB\b|NOMBRE)/;
+  /(TVA|H\.?T\b|SOUS[ -]?TOTAL|ARTICLE|REMISE|REDUCTION|ECONOMIE|FIDELITE|DONT|CARTE|ESPECES|RENDU|MONNAIE|CHEQUE|SOLDE|ANCIEN|AVANT|POINTS|NB\b|NOMBRE)/;
 
 function totalScore(line: string): number {
   if (/\bNET A PAYER\b/.test(line)) return 5;
@@ -302,14 +327,18 @@ function findTva(rawLines: string[], total: number | null): number | null {
 
     // 1. Total de TVA explicitement indiqué.
     if (TVA_TOTAL_PATTERN.test(line)) {
-      const candidate = amounts[amounts.length - 1];
-      if (
-        candidate !== undefined &&
-        isValidTvaAmount(candidate, total) &&
-        (rate === null ||
-          total === null ||
-          matchesTvaRate(candidate, total, rate))
-      ) {
+      // Une ligne « TOTAL TVA 96,80 9,30 106,10 » contient le HT, la TVA et le
+      // TTC : on choisit le montant qui reste plausible comme TVA, pas le
+      // dernier nombre de la ligne.
+      const candidate = amounts.find(
+        (value) =>
+          isValidTvaAmount(value, total) &&
+          hasPlausibleTvaRate(value, total) &&
+          (rate === null ||
+            total === null ||
+            matchesTvaRate(value, total, rate)),
+      );
+      if (candidate !== undefined) {
         explicitTotal = candidate;
         return;
       }
@@ -492,7 +521,7 @@ const BRANDS: Brand[] = [
   { pattern: /\bALDI\b/, name: "Aldi", category: "Alimentation" },
   { pattern: /\bAUCHAN\b/, name: "Auchan", category: "Alimentation" },
   { pattern: /\bINTERMARCHE\b/, name: "Intermarché", category: "Alimentation" },
-  { pattern: /\bSUPER U\b|\bHYPER U\b|\bU EXPRESS\b/, name: "Système U", category: "Alimentation" },
+  { pattern: /\bSUPER U\b|\bHYPER U\b|\bU EXPRESS\b|\bMAGASIN U\b/, name: "Système U", category: "Alimentation" },
   { pattern: /\bMONOPRIX\b/, name: "Monoprix", category: "Alimentation" },
   { pattern: /\bCASINO\b/, name: "Casino", category: "Alimentation", headerOnly: true },
   { pattern: /\bFRANPRIX\b/, name: "Franprix", category: "Alimentation" },
@@ -581,6 +610,10 @@ const CATEGORY_KEYWORDS: { category: Category; pattern: RegExp }[] = [
 const MERCHANT_NOISE =
   /(TICKET|RECU|REÇU|MERCI|BIENVENUE|A BIENTOT|BONNE JOURNEE|BONNE SOIREE|CAISSE|SIRET|SIREN|RCS|TVA|TEL|TELEPHONE|FAX|WWW\.|HTTP|@|DATE|HEURE|CLIENT|FACTURE|COMMANDE|NUMERO|ADRESSE|MONTANT|TOTAL|CARTE|ESPECES|ESPÈCES|RENDU|MONNAIE|CHEQUE|SOLDE|DUPLICATA|ORIGINAL|COPIE|OUVERT|HORAIRES|PROMOTION|FIDELITE)/;
 
+/** Bruit spécifique aux lignes d'articles : ne pas rejeter « Original » ou « Copie » dans un libellé produit. */
+const ITEM_NOISE =
+  /(TICKET|RECU|REÇU|MERCI|BIENVENUE|A BIENTOT|CAISSE|SIRET|SIREN|RCS|TVA|TEL|TELEPHONE|FAX|WWW\.|HTTP|@|DATE|HEURE|CLIENT|FACTURE|COMMANDE|NUMERO|ADRESSE|MONTANT|TOTAL|CARTE|ESPECES|ESPÈCES|RENDU|MONNAIE|CHEQUE|SOLDE|HORAIRES|PROMOTION|FIDELITE)/;
+
 const STREET_NOISE =
   /\b(RUE|AVENUE|AV|BOULEVARD|BD|PLACE|ROUTE|CHEMIN|IMPASSE|ALLEE|ZONE|ZA|ZI|CENTRE COMMERCIAL|GALERIE|QUAI|COURS|PASSAGE|SQUARE|LIEU DIT|CEDEX|BP)\b/;
 
@@ -657,11 +690,54 @@ function findBrandInHeader(rawLines: string[]): Brand | null {
   return null;
 }
 
+function findCityFromAddress(rawLines: string[]): string | null {
+  const header = rawLines.slice(0, 15);
+  for (let index = 0; index < header.length - 1; index += 1) {
+    const line = cleanMerchantLine(header[index]);
+    const next = header[index + 1].trim();
+    if (
+      /^[A-Za-zÀ-ÿ'’ -]{2,32}$/.test(line) &&
+      /^\d{5}\b/.test(next) &&
+      !MERCHANT_NOISE.test(normalizeText(line)) &&
+      !STREET_NOISE.test(normalizeText(line))
+    ) {
+      return titleCase(line);
+    }
+  }
+  return null;
+}
+
+/**
+ * Les tickets « Magasin U » n'impriment pas toujours l'enseigne en texte
+ * (logo). On s'appuie sur la Carte U et sur la ville de l'adresse pour
+ * reconstruire un libellé utile : « Magasin U Rognonas ».
+ */
+function findUStore(rawLines: string[]): {
+  merchant: string;
+  found: boolean;
+  category: Category | null;
+} | null {
+  const full = normalizeText(rawLines.join(" "));
+  if (!/\b(CARTE U|MAGASIN U|SUPER U|HYPER U|U EXPRESS)\b/.test(full)) {
+    return null;
+  }
+
+  const city = findCityFromAddress(rawLines);
+  return {
+    merchant: city ? `Magasin U ${city}` : "Magasin U",
+    found: true,
+    category: "Alimentation",
+  };
+}
+
 function findMerchant(rawLines: string[]): {
   merchant: string;
   found: boolean;
   category: Category | null;
 } {
+  const uStore = findUStore(rawLines);
+  if (uStore) return uStore;
+
   const brand = findBrandInHeader(rawLines);
   if (brand) {
     return { merchant: brand.name, found: true, category: brand.category };
@@ -791,23 +867,137 @@ const ITEM_CATEGORY_RULES: { category: Category; pattern: RegExp }[] = [
 ];
 
 const NON_ITEM_START =
-  /^(?:TOTAL|SOUS[ -]?TOTAL|MONTANT|NET A PAYER|A PAYER|RENDU|MONNAIE|CARTE|CB|ESPECES|ESPECES|CHEQUE|VIREMENT|PAIEMENT|POURBOIRE|ARRONDI|SOLDE|ANCIEN|TICKET|DATE|HEURE|CAISSE|CLIENT|MERCI|SIRET|SIREN|TVA|DONT|POINTS|NOMBRE|NB|ARTICLES|HT|TTC|BASE|TAUX)\b/;
+  /^(?:TOTAL|SOUS[ -]?TOTAL|MONTANT|NET A PAYER|RESTE A PAYER|A PAYER|RENDU|MONNAIE|CARTE|CB|ESPECES|ESPECES|CHEQUE|VIREMENT|PAIEMENT|POURBOIRE|ARRONDI|SOLDE|ANCIEN|TICKET|DATE|HEURE|CAISSE|CLIENT|MERCI|SIRET|SIREN|TVA|DONT|POINTS|NOMBRE|NB|ARTICLES|HT|TTC|BASE|TAUX|VOTRE|VOS)\b/;
 
 const DISCOUNT_KEYWORD =
   /\b(REMISE|REDUCTION|REDUC|ECONOMIE|ECO|AVANTAGE|COUPON|OFFERT|GRATUIT|SOLDE|DEDUCTION|DEDUIT|FIDELITE|CAGNOTTE|BON DE REDUCTION|BON D'ACHAT)\b/;
 
 const TICKET_SAVINGS =
-  /\b(VOUS AVEZ (?:ECONOMISE|GAGNE)|TOTAL (?:ECONOMIES?|REMISES?)|ECONOMIES? (?:REALISEES?|TOTALES?)|CUMUL (?:ECONOMIES?|REMISES?)|DONT (?:REMISE|ECONOMIE))\b/;
+  /\b(VOUS AVEZ (?:ECONOMISE|GAGNE)|TOTAL (?:ECONOMIES?|REMISES?|REDUCTIONS?)|ECONOMIES? (?:REALISEES?|TOTALES?)|CUMUL (?:ECONOMIES?|REMISES?)|DONT (?:REMISE|ECONOMIE))\b/;
+
+const LOYALTY_HEADER =
+  /\b(VOS .*CARTE U|VOTRE SOLDE|VOS € CARTE U|AVANTAGES CARTE U|CARTE U GAGNES|GRACE A VOTRE CARTE U)\b/;
 
 const TRAILING_AMOUNT_RE =
-  /(-?\d{1,4}(?:[ .]\d{3})*[,.]\d{2})\s*(?:€|EUR)?\s*([A-Z])?\s*$/i;
+  /(-?\d{1,4}(?:[ .]\d{3})*[,.]\d{2})\s*(?:€|EUR)?\s*([A-Z]|\d{1,2})?\s*$/i;
 
 const DATE_IN_LINE_RE =
   /\b(?:\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|20\d{2}[/.\-]\d{1,2}[/.\-]\d{1,2})\b/;
 
+const VAT_TABLE_LINE_RE = /^\s*\d{1,2}\s*\/\s*\d{1,2}(?:[.,]\d{1,2})?\b/;
+
+/** Codes de TVA imprimés en fin de ligne sur les tickets U (11 = 5,5 %, 13 = 20 %). */
+const TAX_CODE_RATES: Record<string, number> = {
+  "10": 5.5,
+  "11": 5.5,
+  "13": 20,
+  "20": 20,
+};
+
+const SECTION_MAP: Record<
+  string,
+  { label: string; category: Category | null }
+> = {
+  "FRUITS ET LEGUMES": { label: "Fruits et Légumes", category: "Alimentation" },
+  BVP: {
+    label: "Boulangerie / Viennoiserie / Pâtisserie",
+    category: "Alimentation",
+  },
+  EPICERIE: { label: "Épicerie", category: "Alimentation" },
+  "BEAUTE SANTE": { label: "Beauté & Santé", category: "Santé" },
+  LIQUIDES: { label: "Liquides", category: "Alimentation" },
+  ENTRETIEN: { label: "Entretien", category: "Logement" },
+  CULTURE: { label: "Culture", category: "Loisirs" },
+  "BRICOLAGE JARDINAGE AUT": {
+    label: "Bricolage / Jardinage / Autre",
+    category: "Logement",
+  },
+  "CREMERIE L S": { label: "Crémerie Libre-Service", category: "Alimentation" },
+  "CHARC TRAIT SAUC SECS L": {
+    label: "Charcuterie / Traiteur / Saucissons secs",
+    category: "Alimentation",
+  },
+};
+
+const QUANTITY_DETAIL_RE =
+  /^\s*(?:(\d+(?:[.,]\d+)?)\s*(kg|g|l|cl|ml)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*€?\s*\/\s*(kg|g|l|cl|ml)\s+(\d+(?:[.,]\d+)?)|(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*€?\s+(\d+(?:[.,]\d+)?))/i;
+
+const LABEL_REPLACEMENTS: [RegExp, string][] = [
+  [/\bPAP\.?TOIL\.?/g, "Papier toilette"],
+  [/\bDCHE&BN\b/g, "Douche & Bain"],
+  [/\bDENT\.?/g, "Dentifrice"],
+  [/\bBAD\b/g, "Brosse à dents"],
+  [/\bBATONNETS OUATES\b/g, "Bâtonnets ouatés"],
+  [/\bGEL LAV\.?/g, "Gel lavant"],
+  [/\bGEL FIXATION BETON\b/g, "Gel fixation béton"],
+  [/\bEMMENT\.?PAS\.?RAPE\b/g, "Emmental pasteurisé râpé"],
+  [/\bPT SUISSE\b/g, "Petit-Suisse"],
+  [/\bFROM\.?BLC NAT\.?/g, "Fromage blanc nature"],
+  [/\bYRT A BOIRE\b/g, "Yaourt à boire"],
+  [/\bMOZZA\.?PAST\.?/g, "Mozzarella pasteurisée"],
+  [/\bK\. ?SCHOKOBONS\b/g, "Kinder Schoko-Bons"],
+  [/\bTHON ENTI\.?LISTAO\b/g, "Thon entier Listao"],
+  [/\bMAFALDINE NAPOLETANE BARI\.?/g, "Mafaldine Napoletane Barilla"],
+  [/\bBOUILL\.?VOLAIL\.?DEGR\.?/g, "Bouillon volaille dégraissé"],
+  [/\bLEVURE FRAICHE HIROND\.?CUBE\b/g, "Levure fraîche Hirondelle cube"],
+  [/\bCHOU FLEUR\b/g, "Chou-fleur"],
+  [/\bPROTEGE-DOCUMENTS\b/g, "Protège-documents"],
+  [/\bJAMBON SEC SUPERIEUR\b/g, "Jambon sec supérieur"],
+  [/\bDES DE JAMBON\b/g, "Dés de jambon"],
+  [/\bFILM ETIRABLE\b/g, "Film étirable"],
+  [/\bCISEAUX U ACIER INOX\b/g, "Ciseaux U acier inox"],
+  [/\bPILE U MINI\b/g, "Pile U mini"],
+  [/\bPOMME DE TERRE\b/g, "Pomme de terre"],
+  [/\bENDIVE SACHET\b/g, "Endive sachet"],
+  [/\bPAVE AU LIN\b/g, "Pavé au lin"],
+  [/\bBAGUETTE LA CROUSTILLANTE\b/g, "Baguette La Croustillante"],
+  [/\bBEURRE DOUX EXT\.?FIN\b/g, "Beurre doux extra-fin"],
+  [/\bFROMAGE NATURE\b/g, "Fromage nature"],
+  [/\bJAMBON DE PARIS\b/g, "Jambon de Paris"],
+  [/\bPERRIER\b/g, "Perrier"],
+  [/\bCL\/WH\b/g, "Classic/White"],
+  [/\bPQ\b/g, "plaquette"],
+  [/\bSACH\.?/g, "sachet"],
+  [/\bFIL\.?U\b/g, "faisselle/filet U"],
+  [/\bBLC\b/g, "blanc"],
+  [/\b24RLX\b/g, "(24 rouleaux)"],
+  [/\bBOITE\b/g, "boîte"],
+  [/\bRECH\.?/g, "recharge"],
+  [/\bMETRES\b/g, "mètres"],
+  [/\b2EN1\b/g, "2 en 1"],
+  [/\bASS\b/g, "assortis"],
+  [/\b6TR150G\b/g, "6 tranches 150G"],
+  [/\b6T 240G\b/g, "6 tranches 240G"],
+  [/\bSAIS\.?\b/g, " "],
+  [/\s+OD\b/g, " "],
+  [/\bLPM\b/g, "Le Petit Marseillais"],
+  [/PAMPL\/ORAN\.?/g, "Pamplemousse/Orange"],
+  [/\bGREN&TILL\.?U\b/g, "grenade & tilleul U"],
+  [/\bLOT 2 YAOURT A BOIRE\b/g, "Lot 2 Yaourts à boire"],
+  [/\bPACK FAMILY SOUPLE\b/g, "Pack Family souple"],
+  [/\bPOT\b/g, "pot"],
+  [/\bCR2025\b/g, "CR2025"],
+  [/\bZIP\b/g, "zip"],
+];
+
+const ACCENT_REPLACEMENTS: [RegExp, string][] = [
+  [/\bPAVE\b/gi, "Pavé"],
+  [/\bFRAICHE\b/gi, "fraîche"],
+  [/\bEPICERIE\b/gi, "Épicerie"],
+  [/\bBEAUTE\b/gi, "Beauté"],
+  [/\bCREMERIE\b/gi, "Crémerie"],
+  [/\bPECH\.?LIG\.?/gi, "pêche ligne"],
+  [/\bSEC\b/gi, "sec"],
+  [/\bSUPERIEUR\b/gi, "supérieur"],
+  [/\bDES\b/gi, "Dés"],
+  [/\bCR2025\b/gi, "CR2025"],
+  [/\bCAFE\b/gi, "Café"],
+];
+
 function cleanItemLabel(value: string): string {
   return value
     .replace(/^\s*[*\-–—•·]+\s*/, "")
+    .replace(/[€]/g, " ")
     .replace(/\s{2,}/g, " ")
     .replace(/^[\s.:;,\-–—]+|[\s.:;,\-–—]+$/g, "")
     .trim();
@@ -817,12 +1007,168 @@ function removeAmounts(value: string): string {
   return value.replace(AMOUNT_RE, " ");
 }
 
+function titleWords(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(
+      /(^|[\s'’\-/])(\p{L})/gu,
+      (_, prefix: string, letter: string) => prefix + letter.toUpperCase(),
+    );
+}
+
+function formatItemLabel(value: string): string {
+  let label = cleanItemLabel(value);
+  if (!label) return "";
+
+  for (const [pattern, replacement] of LABEL_REPLACEMENTS) {
+    label = label.replace(pattern, replacement);
+  }
+
+  // Sépare les mots collés après remplacement (« DentifriceORIGINAL »).
+  label = label
+    .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
+    .replace(/(\p{Ll})(\d)/gu, "$1 $2");
+
+  // Uniformise les unités collées aux nombres : 380G → 380 g.
+  label = label.replace(
+    /(\d)\s*(KG|G|ML|CL|CM|L)\b/gi,
+    (_, digit: string, unit: string) => {
+      const normalized = unit.toLowerCase();
+      return `${digit} ${normalized === "l" ? "L" : normalized}`;
+    },
+  );
+
+  // Deuxième passe : certains libellés ne deviennent reconnaissables qu'après
+  // la séparation des mots (ex. « GEL LAV.GREN&TILL.U »).
+  for (const [pattern, replacement] of LABEL_REPLACEMENTS) {
+    label = label.replace(pattern, replacement);
+  }
+
+  // Casse de titre uniquement si le libellé est en majuscules (cas des tickets).
+  if (label === label.toUpperCase()) {
+    label = titleWords(label);
+  }
+
+  // Corrige les mots restés en majuscules dans un libellé déjà partiellement
+  // remplacé (« POMME DE TERRE FILET » → « Pomme de terre Filet »).
+  label = label.replace(/\b\p{Lu}{4,}\b/gu, (word) => {
+    if (/\d/.test(word)) return word;
+    if (word === "ZIP") return "zip";
+    return titleWords(word);
+  });
+
+  for (const [pattern, replacement] of ACCENT_REPLACEMENTS) {
+    label = label.replace(pattern, replacement);
+  }
+
+  return label
+    .replace(/(?<=\p{L})U(\d+\/\d+)\b/gu, " U $1")
+    .replace(/\bU(\d+\/\d+)\b/g, "U $1")
+    .replace(/(?<!\d)\bX(\d+)\b/g, "×$1")
+    .replace(/\b(\d+)\s*[xX]\s*(\d+)/g, "$1 × $2")
+    .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
+    .replace(/(\p{Ll})(\d)/gu, "$1 $2")
+    .replace(/\bA BOIRE\b/g, "à boire")
+    .replace(/\bLot 2 Yaourt à boire\b/g, "Lot 2 Yaourts à boire")
+    .replace(/\bFilet\b/g, "filet")
+    .replace(/\bPlis\b/g, "plis")
+    .replace(/\bFraise\b/g, "fraise")
+    .replace(/\bYOP\b/g, "Yop")
+    .replace(/(\d)\s*%/g, "$1 %")
+    .replace(/%\s*MG\b/g, "% MG")
+    .replace(/(?<=\p{L})\/(?=\p{L})/gu, " / ")
+    .replace(/\s+([,.:;])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function parseSectionHeader(
+  value: string,
+): { label: string; category: Category | null } {
+  const key = normalizeText(value)
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const known = SECTION_MAP[key];
+  if (known) return known;
+
+  return {
+    label: titleWords(value.replace(/[^a-zA-ZÀ-ÿ0-9'’\-/ ]+/g, " ").trim()),
+    category: null,
+  };
+}
+
+function looksLikeProductLabel(line: string, normalized: string): boolean {
+  const cleaned = cleanItemLabel(line);
+  if (cleaned.length < 3) return false;
+  if (!/[a-zA-ZÀ-ÿ]{2}/.test(cleaned)) return false;
+  if (DATE_IN_LINE_RE.test(cleaned)) return false;
+  if (NON_ITEM_START.test(normalized)) return false;
+  if (ITEM_NOISE.test(normalized)) return false;
+  if (STREET_NOISE.test(normalized)) return false;
+  if (/^\d{5}\b/.test(cleaned)) return false;
+  if (/\b(?:TEL|TELEPHONE|SIRET|SIREN|RCS|NAF|TVA|CARTE U|SOLDE|AVANTAGE|GAGNE)\b/.test(normalized)) {
+    return false;
+  }
+
+  const letters = (cleaned.match(/[a-zA-ZÀ-ÿ]/g) ?? []).length;
+  const digits = (cleaned.match(/\d/g) ?? []).length;
+  if (digits > letters * 0.8 + 2) return false;
+
+  return true;
+}
+
+function parseQuantityDetail(line: string): {
+  quantity: number;
+  unit?: string;
+  unitPrice: number;
+  amount: number;
+} | null {
+  const match = QUANTITY_DETAIL_RE.exec(line);
+  if (!match) return null;
+
+  if (match[1] !== undefined) {
+    const quantity = parseAmount(match[1]);
+    const unitPrice = parseAmount(match[3]);
+    const amount = parseAmount(match[5]);
+    if (quantity === null || unitPrice === null || amount === null) return null;
+    return {
+      quantity: Math.round(quantity * 1000) / 1000,
+      unit: match[2]?.toLowerCase(),
+      unitPrice: roundCurrency(unitPrice),
+      amount: roundCurrency(amount),
+    };
+  }
+
+  const quantity = Number(match[6]);
+  const unitPrice = parseAmount(match[7]);
+  const amount = parseAmount(match[8]);
+  if (!Number.isFinite(quantity) || unitPrice === null || amount === null) {
+    return null;
+  }
+  return {
+    quantity: Math.round(quantity * 1000) / 1000,
+    unitPrice: roundCurrency(unitPrice),
+    amount: roundCurrency(amount),
+  };
+}
+
+function taxRateFromCode(code: string | undefined): number | null {
+  if (!code) return null;
+  const rate = TAX_CODE_RATES[code];
+  return rate ?? null;
+}
+
 function parseQuantity(rawLabel: string): { quantity: number; label: string } {
   let quantity = 1;
   let label = rawLabel;
 
   const patterns = [
-    /\b(\d{1,3})\s*[xX×]\s*/,
+    // « 2 x 1,89 € » : un prix derrière le x. « 6X1L » ou « 12X60G » sont
+    // des conditionnements, pas des quantités achetées.
+    /\b(\d{1,3})\s*[xX×]\s*(?=\d+[,.]\d{2}\b)/,
+    // « 2 X PAIN 1,20 2,40 » : le libellé suit immédiatement le x.
+    /\b(\d{1,3})\s*[xX×]\s+(?=[a-zA-ZÀ-ÿ])/,
     /\b(?:QTE|QTY|QUANTITE)\s*[:.]?\s*(\d{1,3})\b/i,
     /\b(\d{1,3})\s*(?:PIECES?|PCS?|UNITES?)\b/i,
   ];
@@ -842,7 +1188,10 @@ function classifyItem(
   label: string,
   ticketCategory: Category,
   defaultCategory: Category,
+  sectionCategory: Category | null = null,
 ): Category {
+  if (sectionCategory) return sectionCategory;
+
   const normalized = normalizeText(label);
   for (const entry of ITEM_CATEGORY_RULES) {
     // Dans un restaurant, « CAFE » ou « SALADE » sont des plats, pas des
@@ -885,6 +1234,15 @@ function isBoldLine(
   );
 }
 
+type PendingLabel = {
+  label: string;
+  bold: boolean;
+  section?: string;
+  sectionCategory: Category | null;
+  taxRate: number | null;
+  index: number;
+};
+
 function extractItems(
   rawLines: string[],
   total: number | null,
@@ -900,25 +1258,122 @@ function extractItems(
   const collected: { item: ReceiptItem; index: number }[] = [];
   const warnings: string[] = [];
   let ticketSavings = 0;
+  let currentSection: { label: string; category: Category | null } | null = null;
+  let pendingLabel: PendingLabel | null = null;
+  let loyaltyBlock = false;
 
   for (let lineIndex = 0; lineIndex < rawLines.length; lineIndex += 1) {
     const rawLine = rawLines[lineIndex];
     const line = rawLine.trim();
-    if (!line) continue;
+    if (!line) {
+      pendingLabel = null;
+      continue;
+    }
 
     const normalized = normalizeText(line);
-    if (DATE_IN_LINE_RE.test(line)) continue;
-    if (TVA_PATTERN.test(normalized)) continue;
+
+    // Bloc de fidélité / solde Carte U : ce ne sont pas des achats.
+    if (LOYALTY_HEADER.test(normalized)) {
+      loyaltyBlock = true;
+      pendingLabel = null;
+      continue;
+    }
+    if (loyaltyBlock) continue;
+
+    // En-tête de rayon : « >>>> FRUITS ET LEGUMES ».
+    const sectionMatch = /^>{3,}\s*(.+)$/.exec(line);
+    if (sectionMatch) {
+      currentSection = parseSectionHeader(sectionMatch[1]);
+      pendingLabel = null;
+      continue;
+    }
+
+    // Tableau de TVA : « 11 / 5,50 69,36 € 3,81 € 73,17 € ».
+    if (VAT_TABLE_LINE_RE.test(line)) {
+      pendingLabel = null;
+      continue;
+    }
+    if (TVA_PATTERN.test(normalized) || DATE_IN_LINE_RE.test(line)) {
+      pendingLabel = null;
+      continue;
+    }
 
     const trailing = TRAILING_AMOUNT_RE.exec(line);
-    if (!trailing || trailing.index === undefined) continue;
+    if (!trailing || trailing.index === undefined) {
+      if (looksLikeProductLabel(line, normalized)) {
+        const pendingTaxMatch = /\s+(\d{1,2})\s*$/.exec(line);
+        const pendingTaxRate = taxRateFromCode(pendingTaxMatch?.[1]);
+        const rawPendingLabel = cleanItemLabel(
+          line.replace(/\s+\d{1,2}\s*$/, ""),
+        );
+        if (rawPendingLabel) {
+          const formatted = formatItemLabel(rawPendingLabel);
+          pendingLabel = {
+            label: formatted,
+            bold: isBoldLine(line, formatted, boldLines),
+            section: currentSection?.label,
+            sectionCategory: currentSection?.category ?? null,
+            taxRate: pendingTaxRate,
+            index: lineIndex,
+          };
+        }
+      } else {
+        pendingLabel = null;
+      }
+      continue;
+    }
 
     const rawAmount = parseAmount(trailing[1]);
     if (rawAmount === null) continue;
     const amount = roundCurrency(Math.abs(rawAmount));
     if (amount <= 0 || amount > 10_000) continue;
 
+    const taxRate = taxRateFromCode(trailing[2]);
     const isNegative = trailing[1].trim().startsWith("-");
+    const quantityDetail = parseQuantityDetail(line);
+
+    // Ligne de détail d'une quantité : « 2 x 1,89 € 3,78 € 11 » ou
+    // « 0,862 kg x 2,45 €/kg 2,11 € ». Elle complète le libellé précédent.
+    if (quantityDetail) {
+      if (!pendingLabel) continue;
+
+      const label = pendingLabel.label;
+      const section = pendingLabel.section;
+      const sectionCategory = pendingLabel.sectionCategory;
+      const tvaRate = taxRate ?? pendingLabel.taxRate;
+      const tva =
+        tvaRate !== null
+          ? roundCurrency(amount - amount / (1 + tvaRate / 100))
+          : null;
+
+      collected.push({
+        index: pendingLabel.index,
+        item: {
+          label,
+          category: classifyItem(
+            label,
+            ticketCategory,
+            defaultCategory,
+            sectionCategory,
+          ),
+          section,
+          quantity: quantityDetail.quantity,
+          unit: quantityDetail.unit,
+          unitPrice: quantityDetail.unitPrice,
+          amount: quantityDetail.amount,
+          tva,
+          tvaRate,
+          savings: 0,
+          bold: pendingLabel.bold,
+          kind: "item",
+        },
+      });
+      pendingLabel = null;
+      continue;
+    }
+
+    pendingLabel = null;
+
     const rawLabel = line.slice(0, trailing.index);
     if (!/[a-zA-ZÀ-ÿ]/.test(rawLabel)) continue;
 
@@ -933,7 +1388,7 @@ function extractItems(
     const isDiscount = isNegative || DISCOUNT_KEYWORD.test(normalizedLabel);
     if (!isDiscount) {
       if (NON_ITEM_START.test(normalizedLabel)) continue;
-      if (MERCHANT_NOISE.test(normalizedLabel)) continue;
+      if (ITEM_NOISE.test(normalizedLabel)) continue;
       if (STREET_NOISE.test(normalizedLabel)) continue;
       if (/\b(?:TEL|TELEPHONE|SIRET|SIREN|RCS|APE|NAF)\b/.test(normalizedLabel)) {
         continue;
@@ -941,17 +1396,16 @@ function extractItems(
     }
 
     const quantityInfo = parseQuantity(cleanedRawLabel);
-    let label = cleanItemLabel(removeAmounts(quantityInfo.label));
-
-    // Un code fiscal isolé (A, B, C) reste parfois collé au libellé.
-    label = label.replace(/\s+[A-Z]$/i, "").trim();
+    let label = formatItemLabel(
+      cleanItemLabel(removeAmounts(quantityInfo.label)),
+    );
 
     if (label.length < 2 || !/[a-zA-ZÀ-ÿ]/.test(label)) continue;
     if (label.length > 90) label = `${label.slice(0, 87).trim()}…`;
 
     if (!isDiscount) {
       if (NON_ITEM_START.test(normalizeText(label))) continue;
-      if (MERCHANT_NOISE.test(normalizeText(label))) continue;
+      if (ITEM_NOISE.test(normalizeText(label))) continue;
       if (STREET_NOISE.test(normalizeText(label))) continue;
     }
 
@@ -986,11 +1440,14 @@ function extractItems(
     if (!unitPrice) unitPrice = roundCurrency(amount / Math.max(1, quantity));
 
     const tvaMatch = [...line.matchAll(/(\d{1,2}(?:[.,]\d{1,2})?)\s*%/g)];
-    const tvaRate = tvaMatch.length
+    const percentRate = tvaMatch.length
       ? parseAmount(tvaMatch[tvaMatch.length - 1][1])
       : null;
     const normalisedRate =
-      tvaRate !== null && tvaRate > 0 && tvaRate <= 30 ? tvaRate : null;
+      taxRate ??
+      (percentRate !== null && percentRate > 0 && percentRate <= 30
+        ? percentRate
+        : null);
     const tva =
       !isDiscount && normalisedRate !== null
         ? roundCurrency(amount - amount / (1 + normalisedRate / 100))
@@ -1008,12 +1465,24 @@ function extractItems(
       savings = roundCurrency(amounts[0] - amount);
     }
 
+    const sectionCategory = currentSection?.category ?? null;
     collected.push({
       index: lineIndex,
       item: {
         label,
-        category: classifyItem(label, ticketCategory, defaultCategory),
+        category: isDiscount
+          ? ticketCategory !== "Divers"
+            ? ticketCategory
+            : defaultCategory
+          : classifyItem(
+              label,
+              ticketCategory,
+              defaultCategory,
+              sectionCategory,
+            ),
+        section: isDiscount ? "Réductions" : currentSection?.label,
         quantity: isDiscount ? 1 : quantity,
+        unit: undefined,
         unitPrice: isDiscount ? null : unitPrice,
         amount,
         tva,

@@ -178,7 +178,7 @@ Google Drive API  → dossier « Tickets de caisse — Caissette » (tickets + p
 | 11 | Articles (JSON) | Détail structuré : `items[]`, TVA totale, économies, TVA héritée éventuelle |
 
 - Une feuille V1 conserve physiquement sa colonne `TVA` (masquée) ; elle n'est plus écrite par l'application. La TVA est désormais portée par chaque article et/ou par le total calculé du ticket.
-- Chaque article contient : libellé, catégorie, quantité, prix unitaire, montant, TVA, taux de TVA, économie, indicateur « en avant » et type (`item` ou `discount`).
+- Chaque article contient : libellé, catégorie, rayon (`section`), quantité, unité (`kg`, `g`, `l`, `ml`), prix unitaire, montant, TVA, taux de TVA, économie, indicateur « en avant » et type (`item` ou `discount`).
 - Limite de stockage : 50 000 caractères par cellule Google Sheets, ce qui permet d'encoder le détail complet d'environ 150 articles par ticket.
 - Mise en forme créée automatiquement :
   - en-tête sur fond sombre, texte blanc, gras, aligné verticalement au milieu ;
@@ -409,14 +409,19 @@ Contrôles de cohérence :
 #### Détail des articles
 
 - Chaque ligne du ticket contenant un montant final est analysée.
-- Quantités reconnues : `2 x PAIN 1,20 2,40`, `QTE 2 …`, `3 PIÈCES …` ; à défaut, un ratio entier entre deux montants est interprété comme une quantité.
+- **Lignes multi-lignes** : un libellé seul (`BAGUETTE LA CROUSTILLANTE`, `BEURRE DOUX…`, `FENOUIL`) est conservé puis complété par la ligne suivante (`2 x 0,85 €`, `4 x 2,45 €`, `0,862 kg x 2,45 €/kg`). Cela évite les faux articles « x € » ou « kg x €/kg ».
+- Quantités reconnues : `2 x PAIN 1,20 2,40`, `QTE 2 …`, `3 PIÈCES …` ; les conditionnements `6X1L`, `12X60G`, `2X75G` ne sont pas pris pour des quantités achetées.
+- **Produits pesés** : `0,862 kg x 2,45 €/kg 2,11 €` → quantité 0,862, unité `kg`, prix unitaire 2,45 €, montant 2,11 €.
 - Prix unitaire = montant / quantité, ou premier montant quand `prix × quantité ≈ total`.
+- **Rayons** : les en-têtes `>>>> FRUITS ET LEGUMES`, `BVP`, `EPICERIE`, `BEAUTE SANTE`, `CREMERIE`, `CHARC.TRAIT…` sont mappés vers un libellé lisible et une catégorie, puis conservés dans `section` pour l'affichage groupé.
+- **Codes TVA** : les codes 11 et 13 en fin de ligne (Magasin U) correspondent à 5,5 % et 20 % ; la TVA de l'article est calculée à partir du taux.
 - La ligne de total, les lignes de TVA, de paiement, d'adresse, de téléphone et d'en-tête sont exclues.
+- **Blocs Carte U** : après `VOS AVANTAGES CARTE U` / `VOS € CARTE U GAGNES`, les points gagnés, l'ancien solde et le nouveau solde sont ignorés et ne deviennent ni articles ni remises.
 - Si l'OCR déforme le mot `TOTAL` (ex. `Torai ic`), la ligne retenue pour le total est écartée du détail.
-- **Catégorie de l'article** : mots-clés du libellé (boissons, ménage, pharmacie, bricolage, etc.), puis catégorie du ticket si elle n'est pas `Divers`, puis catégorie par défaut des paramètres.
+- **Catégorie de l'article** : rayon du ticket en priorité, puis mots-clés du libellé, puis catégorie du ticket, puis catégorie par défaut.
 - **Mise en avant** : police grasse détectée dans le PDF (`fontFamily`), nom de police OCR quand Tesseract le fournit, et lignes nettement plus hautes que la médiane. L'utilisateur peut cocher/décocher « en avant ».
 - **Remises** : lignes `REMISE`, `RÉDUCTION`, `COUPON`, `AVANTAGE`, `SOLDE`, montants négatifs et prix barrés (`PROMO 5,00 4,00`) sont enregistrés comme lignes de type `discount` et cumulés dans `Économies`.
-- **Remise globale** : `VOUS AVEZ ÉCONOMISÉ 3,20`, `TOTAL ÉCONOMIES`, `DONT REMISE` est conservée comme remise de ticket.
+- **Remise globale** : `VOUS AVEZ ÉCONOMISÉ 3,20`, `TOTAL REDUCTIONS`, `TOTAL ÉCONOMIES`, `DONT REMISE` est conservée comme remise de ticket, sans double comptage avec les lignes détaillées.
 - Un avertissement signale un écart entre la somme des articles et le total.
 - Limite : 150 articles analysés par ticket, 90 caractères par libellé.
 
@@ -494,6 +499,8 @@ Ordre de priorité :
 - Champs pré-remplis : date, montant, magasin, catégorie, moyen de paiement, note.
 - **Détail des articles** :
   - liste éditable (libellé, quantité, prix unitaire, montant, catégorie, « en avant ») ;
+  - regroupement par rayon du ticket (`Fruits et Légumes`, `BVP`, `Beauté & Santé`, `Réductions`…) ;
+  - quantités décimales pour les produits pesés (`0,862 kg × 2,45 €/kg`) ;
   - bouton **Article** et bouton **Remise** ;
   - total des articles, économies et TVA ;
   - contrôle de cohérence avec le total du ticket (écart signalé en ambre) ;
@@ -510,7 +517,7 @@ Ordre de priorité :
   - catégorie choisie dans la liste ;
   - moyen de paiement dans la liste (ou valeur existante conservée) ;
   - note limitée à 500 caractères ;
-  - articles : libellé obligatoire, montant positif, quantité 1 à 999, 150 articles maximum.
+  - articles : libellé obligatoire, montant positif, quantité entre 0,001 et 999 (poids accepté), section et unité facultatives, 150 articles maximum.
 - Bouton d'enregistrement avec état de chargement, bouton Annuler, fermeture par `Échap`, clic sur le fond ou croix.
 - En mode modification, les mêmes champs sont éditables ; le lien du ticket, la date d'ajout et les articles non modifiés sont conservés.
 
@@ -914,7 +921,7 @@ Page publique `/confidentialite` détaillant :
 - `merchant` : non vide, 120 caractères maximum.
 - `category` : parmi les 10 catégories connues.
 - `amount` : nombre > 0 et ≤ 1 000 000, arrondi à 2 décimales.
-- `items` : tableau facultatif, 200 éléments maximum. Chaque article : `label` non vide (120 caractères), `category` valide, `quantity` 1–999, `amount` > 0, `unitPrice`/`tva`/`tvaRate`/`savings` cohérents, `bold` booléen, `kind` `item` ou `discount`.
+- `items` : tableau facultatif, 150 éléments maximum. Chaque article : `label` non vide (120 caractères), `category` valide, `section`/`unit` facultatifs, `quantity` entre 0,001 et 999 (poids décimal accepté), `amount` > 0, `unitPrice`/`tva`/`tvaRate`/`savings` cohérents, `bold` booléen, `kind` `item` ou `discount`.
 - `ticketTva` : facultatif, entre 0 et le montant (TVA globale lue sur le ticket, non éditable).
 - `ticketSavings` : facultatif, entre 0 et le montant (remise globale lue sur le ticket).
 - `payment` : texte, valeur par défaut « Carte bancaire », 40 caractères maximum.
@@ -1098,10 +1105,11 @@ Démarrage automatique sous Windows possible via le Planificateur de tâches :
 | --- | --- |
 | `npm run test:parser` | 23 cas de tickets français : dates, totaux, TVA multi-taux, articles, quantités, remises, économies, gras, enseignes, PDF sur une ligne |
 | `npm run test:expenses` | Validation des dépenses : articles, TVA de ticket, économies, patch partiel, empreinte de conflit |
+| `npm run test:ticket-u` | Ticket Magasin U complet : 35 articles, poids, rayons, réductions, codes TVA et exclusion des soldes Carte U |
 | `npm run test:pdf` | Construit un PDF minimal, extrait son texte et affiche l'analyse |
 | `npm run test:ocr` | Génère une image de ticket, la prétraite, lance Tesseract et affiche le résultat |
 
-Les tests sont des scripts autonomes avec `tsx`, sans framework de test et sans appel à Google. Ils s'arrêtent avec un code non nul en cas d'échec (`test:parser`, `test:expenses`) ou terminent le processus (`test:ocr`).
+Les tests sont des scripts autonomes avec `tsx`, sans framework de test et sans appel à Google. Ils s'arrêtent avec un code non nul en cas d'échec (`test:parser`, `test:expenses`, `test:ticket-u`) ou terminent le processus (`test:ocr`).
 
 ---
 

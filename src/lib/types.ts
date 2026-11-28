@@ -28,7 +28,11 @@ export type ReceiptItemKind = "item" | "discount" | "fee";
 export interface ReceiptItem {
   label: string;
   category: Category;
+  /** Rayon du ticket (ex. « Fruits et Légumes », « Crémerie »). */
+  section?: string;
   quantity: number;
+  /** Unité de la quantité pour les produits pesés (kg, g, l, ml). */
+  unit?: string;
   unitPrice: number | null;
   amount: number;
   tva: number | null;

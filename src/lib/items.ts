@@ -51,10 +51,19 @@ export function normalizeItem(input: unknown): ReceiptItem | null {
     ? raw.category
     : "Divers";
 
+  const sectionRaw =
+    typeof raw.section === "string" ? raw.section.trim().slice(0, 80) : "";
+  const section = sectionRaw || undefined;
+
+  const unitRaw =
+    typeof raw.unit === "string" ? raw.unit.trim().toLowerCase().slice(0, 10) : "";
+  const unit = unitRaw || undefined;
+
   const kind: ReceiptItemKind = isKind(raw.kind) ? raw.kind : "item";
+  const quantityRaw = asFinite(raw.quantity) ?? 1;
   const quantity = Math.max(
-    1,
-    Math.min(999, Math.round(asFinite(raw.quantity) ?? 1)),
+    0.001,
+    Math.min(999, Math.round(quantityRaw * 1000) / 1000),
   );
 
   const unitPriceRaw = asBounded(raw.unitPrice, 0, 1_000_000);
@@ -78,7 +87,9 @@ export function normalizeItem(input: unknown): ReceiptItem | null {
   return {
     label,
     category,
+    section,
     quantity,
+    unit,
     unitPrice,
     amount,
     tva,
