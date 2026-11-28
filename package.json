@@ -12,6 +12,7 @@
     "test:parser": "tsx scripts/test-parser.ts",
     "test:expenses": "tsx scripts/test-expenses.ts",
     "test:ticket-u": "tsx scripts/test-ticket-u.ts",
+    "test:stores": "tsx scripts/test-parser-stores.ts",
     "test:pdf": "tsx scripts/test-pdf.ts",
     "test:ocr": "tsx scripts/test-ocr.ts"
   },

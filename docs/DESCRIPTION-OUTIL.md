@@ -414,9 +414,10 @@ Contrôles de cohérence :
 - **Produits pesés** : `0,862 kg x 2,45 €/kg 2,11 €` → quantité 0,862, unité `kg`, prix unitaire 2,45 €, montant 2,11 €.
 - Prix unitaire = montant / quantité, ou premier montant quand `prix × quantité ≈ total`.
 - **Rayons** : les en-têtes `>>>> FRUITS ET LEGUMES`, `BVP`, `EPICERIE`, `BEAUTE SANTE`, `CREMERIE`, `CHARC.TRAIT…` sont mappés vers un libellé lisible et une catégorie, puis conservés dans `section` pour l'affichage groupé.
-- **Codes TVA** : les codes 11 et 13 en fin de ligne (Magasin U) correspondent à 5,5 % et 20 % ; la TVA de l'article est calculée à partir du taux.
+- **Codes TVA** : les codes 11 et 13 en fin de ligne (Magasin U) sont convertis en 5,5 % et 20 % **seulement si le ticket contient le tableau de TVA correspondant** (`11 / 5,50 …`). Sans ce tableau, les codes sont retirés du libellé mais aucun taux n'est inventé.
 - La ligne de total, les lignes de TVA, de paiement, d'adresse, de téléphone et d'en-tête sont exclues.
-- **Blocs Carte U** : après `VOS AVANTAGES CARTE U` / `VOS € CARTE U GAGNES`, les points gagnés, l'ancien solde et le nouveau solde sont ignorés et ne deviennent ni articles ni remises.
+- **Blocs de fidélité** : après `VOS AVANTAGES`, `VOS POINTS FIDELITE`, `VOTRE SOLDE`, `CAGNOTTE`, `VOS € CARTE U GAGNES`…, les points gagnés, l'ancien solde et le nouveau solde sont ignorés et ne deviennent ni articles ni remises. Un nouveau bloc de paiement réactive la lecture.
+- **En-têtes de rayon génériques** : `>>>>`, `*** RAYON ***`, `--- RAYON ---` et `RAYON : …` sont reconnus, pas seulement le format U.
 - Si l'OCR déforme le mot `TOTAL` (ex. `Torai ic`), la ligne retenue pour le total est écartée du détail.
 - **Catégorie de l'article** : rayon du ticket en priorité, puis mots-clés du libellé, puis catégorie du ticket, puis catégorie par défaut.
 - **Mise en avant** : police grasse détectée dans le PDF (`fontFamily`), nom de police OCR quand Tesseract le fournit, et lignes nettement plus hautes que la médiane. L'utilisateur peut cocher/décocher « en avant ».
@@ -1106,10 +1107,11 @@ Démarrage automatique sous Windows possible via le Planificateur de tâches :
 | `npm run test:parser` | 23 cas de tickets français : dates, totaux, TVA multi-taux, articles, quantités, remises, économies, gras, enseignes, PDF sur une ligne |
 | `npm run test:expenses` | Validation des dépenses : articles, TVA de ticket, économies, patch partiel, empreinte de conflit |
 | `npm run test:ticket-u` | Ticket Magasin U complet : 35 articles, poids, rayons, réductions, codes TVA et exclusion des soldes Carte U |
+| `npm run test:stores` | Panel multi-enseignes : Carrefour, Lidl, E.Leclerc, restaurant, pharmacie, Amazon, carburant, rayons génériques, fidélité, codes TVA sans tableau |
 | `npm run test:pdf` | Construit un PDF minimal, extrait son texte et affiche l'analyse |
 | `npm run test:ocr` | Génère une image de ticket, la prétraite, lance Tesseract et affiche le résultat |
 
-Les tests sont des scripts autonomes avec `tsx`, sans framework de test et sans appel à Google. Ils s'arrêtent avec un code non nul en cas d'échec (`test:parser`, `test:expenses`, `test:ticket-u`) ou terminent le processus (`test:ocr`).
+Les tests sont des scripts autonomes avec `tsx`, sans framework de test et sans appel à Google. Ils s'arrêtent avec un code non nul en cas d'échec (`test:parser`, `test:expenses`, `test:ticket-u`, `test:stores`) ou terminent le processus (`test:ocr`).
 
 ---
 

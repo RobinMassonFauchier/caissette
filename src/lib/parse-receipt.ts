@@ -876,7 +876,7 @@ const TICKET_SAVINGS =
   /\b(VOUS AVEZ (?:ECONOMISE|GAGNE)|TOTAL (?:ECONOMIES?|REMISES?|REDUCTIONS?)|ECONOMIES? (?:REALISEES?|TOTALES?)|CUMUL (?:ECONOMIES?|REMISES?)|DONT (?:REMISE|ECONOMIE))\b/;
 
 const LOYALTY_HEADER =
-  /\b(VOS .*CARTE U|VOTRE SOLDE|VOS € CARTE U|AVANTAGES CARTE U|CARTE U GAGNES|GRACE A VOTRE CARTE U)\b/;
+  /(VOS .*CARTE U|VOTRE SOLDE|VOS .*CARTE|CARTE U GAGNES|AVANTAGES? CARTE|GRACE A VOTRE CARTE|VOS POINTS|POINTS FIDELITE|SOLDE FIDELITE|VOTRE CAGNOTTE|MA CAGNOTTE|CAGNOTTE|VOS AVANTAGES|MES AVANTAGES|PROGRAMME FIDELITE|VOS ECONOMIES|TOTAL AVANTAGES)/;
 
 const TRAILING_AMOUNT_RE =
   /(-?\d{1,4}(?:[ .]\d{3})*[,.]\d{2})\s*(?:€|EUR)?\s*([A-Z]|\d{1,2})?\s*$/i;
@@ -887,12 +887,22 @@ const DATE_IN_LINE_RE =
 const VAT_TABLE_LINE_RE = /^\s*\d{1,2}\s*\/\s*\d{1,2}(?:[.,]\d{1,2})?\b/;
 
 /** Codes de TVA imprimés en fin de ligne sur les tickets U (11 = 5,5 %, 13 = 20 %). */
-const TAX_CODE_RATES: Record<string, number> = {
-  "10": 5.5,
-  "11": 5.5,
-  "13": 20,
-  "20": 20,
-};
+function detectTaxCodeRates(rawLines: string[]): Map<string, number> {
+  const rates = new Map<string, number>();
+
+  for (const rawLine of rawLines) {
+    const line = normalizeText(rawLine);
+    // Tableau U : « 11 / 5,50 69,36 € 3,81 € 73,17 € ».
+    const match = /^\s*(\d{1,2})\s*\/\s*(\d{1,2}(?:[.,]\d{1,2})?)\b/.exec(line);
+    if (!match) continue;
+    const rate = parseAmount(match[2]);
+    if (rate !== null && rate > 0 && rate <= 30) {
+      rates.set(match[1], rate);
+    }
+  }
+
+  return rates;
+}
 
 const SECTION_MAP: Record<
   string,
@@ -1098,6 +1108,42 @@ function parseSectionHeader(
   };
 }
 
+/**
+ * Reconnaît les en-têtes de rayon de plusieurs enseignes :
+ * « >>>> FRUITS ET LEGUMES », « *** EPICERIE *** », « --- BVP --- »,
+ * « RAYON : CREMERIE ».
+ */
+function parseSectionLine(
+  line: string,
+): { label: string; category: Category | null } | null {
+  const normalized = normalizeText(line);
+  if (
+    /\b(VOS|VOTRE|CARTE|REDUCTION|ECONOMIE|AVANTAGE|SOLDE|TOTAL|REMISE)\b/.test(
+      normalized,
+    )
+  ) {
+    return null;
+  }
+
+  const arrow = /^>{3,}\s*(.+)$/.exec(line);
+  if (arrow) return parseSectionHeader(arrow[1]);
+
+  const stars = /^\*{3,}\s*([A-ZÀ-Ÿ][A-ZÀ-Ÿ0-9 &'’./-]{3,})\s*\*{3,}$/.exec(
+    line,
+  );
+  if (stars) return parseSectionHeader(stars[1]);
+
+  const dashes = /^[-=]{3,}\s*([A-ZÀ-Ÿ][A-ZÀ-Ÿ0-9 &'’./-]{3,})\s*[-=]{3,}$/.exec(
+    line,
+  );
+  if (dashes) return parseSectionHeader(dashes[1]);
+
+  const rayon = /^RAYON\s*[:\-]\s*(.+)$/i.exec(line);
+  if (rayon) return parseSectionHeader(rayon[1]);
+
+  return null;
+}
+
 function looksLikeProductLabel(line: string, normalized: string): boolean {
   const cleaned = cleanItemLabel(line);
   if (cleaned.length < 3) return false;
@@ -1153,10 +1199,12 @@ function parseQuantityDetail(line: string): {
   };
 }
 
-function taxRateFromCode(code: string | undefined): number | null {
+function taxRateFromCode(
+  code: string | undefined,
+  rates: Map<string, number>,
+): number | null {
   if (!code) return null;
-  const rate = TAX_CODE_RATES[code];
-  return rate ?? null;
+  return rates.get(code) ?? null;
 }
 
 function parseQuantity(rawLabel: string): { quantity: number; label: string } {
@@ -1261,6 +1309,7 @@ function extractItems(
   let currentSection: { label: string; category: Category | null } | null = null;
   let pendingLabel: PendingLabel | null = null;
   let loyaltyBlock = false;
+  const taxCodeRates = detectTaxCodeRates(rawLines);
 
   for (let lineIndex = 0; lineIndex < rawLines.length; lineIndex += 1) {
     const rawLine = rawLines[lineIndex];
@@ -1272,21 +1321,32 @@ function extractItems(
 
     const normalized = normalizeText(line);
 
+    // En-tête de rayon : « >>>> FRUITS ET LEGUMES », « *** EPICERIE *** »…
+    const section = parseSectionLine(line);
+    if (section) {
+      currentSection = section;
+      pendingLabel = null;
+      loyaltyBlock = false;
+      continue;
+    }
+
     // Bloc de fidélité / solde Carte U : ce ne sont pas des achats.
     if (LOYALTY_HEADER.test(normalized)) {
       loyaltyBlock = true;
       pendingLabel = null;
       continue;
     }
-    if (loyaltyBlock) continue;
-
-    // En-tête de rayon : « >>>> FRUITS ET LEGUMES ».
-    const sectionMatch = /^>{3,}\s*(.+)$/.exec(line);
-    if (sectionMatch) {
-      currentSection = parseSectionHeader(sectionMatch[1]);
-      pendingLabel = null;
-      continue;
+    // Un nouveau bloc de paiement indique la fin d'un éventuel bloc fidélité
+    // (utile si le ticket contient plusieurs transactions).
+    if (
+      loyaltyBlock &&
+      /^(RESTE A PAYER|CARTE BANCAIRE|CB|ESPECES|ESPECES|CHEQUE|VIREMENT)\b/.test(
+        normalized,
+      )
+    ) {
+      loyaltyBlock = false;
     }
+    if (loyaltyBlock) continue;
 
     // Tableau de TVA : « 11 / 5,50 69,36 € 3,81 € 73,17 € ».
     if (VAT_TABLE_LINE_RE.test(line)) {
@@ -1302,7 +1362,10 @@ function extractItems(
     if (!trailing || trailing.index === undefined) {
       if (looksLikeProductLabel(line, normalized)) {
         const pendingTaxMatch = /\s+(\d{1,2})\s*$/.exec(line);
-        const pendingTaxRate = taxRateFromCode(pendingTaxMatch?.[1]);
+        const pendingTaxRate = taxRateFromCode(
+          pendingTaxMatch?.[1],
+          taxCodeRates,
+        );
         const rawPendingLabel = cleanItemLabel(
           line.replace(/\s+\d{1,2}\s*$/, ""),
         );
@@ -1328,7 +1391,7 @@ function extractItems(
     const amount = roundCurrency(Math.abs(rawAmount));
     if (amount <= 0 || amount > 10_000) continue;
 
-    const taxRate = taxRateFromCode(trailing[2]);
+    const taxRate = taxRateFromCode(trailing[2], taxCodeRates);
     const isNegative = trailing[1].trim().startsWith("-");
     const quantityDetail = parseQuantityDetail(line);
 

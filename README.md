@@ -168,8 +168,8 @@ Les catégories proposées : Alimentation, Restaurants, Transport, Carburant, Sa
 - **Détail des articles** : nom, quantité (`2 x 1,20`), poids (`0,862 kg x 2,45 €/kg`), prix unitaire, montant, TVA par taux et catégorie déduite du libellé, du rayon et du contexte du magasin.
 - **Rayons du ticket** : les en-têtes `>>>> FRUITS ET LEGUMES`, `BVP`, `CREMERIE`, etc. sont conservés et affichés pour classer les articles comme en magasin.
 - **Lignes multi-lignes** : un libellé seul suivi de sa ligne de quantité/poids est regroupé (`BAGUETTE` + `2 x 0,85 €`), au lieu de créer un article « x € ».
-- **Codes TVA** : les codes 11/13 en fin de ligne (Magasin U) sont convertis en taux 5,5 % / 20 % et la TVA de chaque article est calculée.
-- **Blocs de fidélité** : les soldes Carte U, points gagnés et avantages sont ignorés : ils ne deviennent plus des articles ni des remises.
+- **Codes TVA** : les codes 11/13 en fin de ligne (Magasin U) sont convertis en taux 5,5 % / 20 % **uniquement si le ticket contient le tableau de TVA correspondant** ; sinon ils sont retirés du libellé sans inventer de taux.
+- **Blocs de fidélité** : les soldes, points gagnés et avantages (Carte U, points fidélité, cagnotte…) sont ignorés : ils ne deviennent plus des articles ni des remises.
 - **Articles en avant** : les polices grasses des PDF et les lignes nettement plus grandes sont marquées ; chaque article peut aussi être coché « en avant » à la main.
 - **Économies** : lignes `REMISE`, `RÉDUCTION`, `COUPON`, `AVANTAGE`, prix barrés et totaux `VOUS AVEZ ÉCONOMISÉ` sont cumulés. Le total de réductions n'est compté qu'une fois.
 - **TVA** : le taux est lu séparément du montant (`TVA 20,00% 7,03`), les tableaux multi-taux sont additionnés et un taux seul est recalculé à partir du total. Fini la confusion entre « 20,00 » (taux) et « 20,00 € » (montant).
@@ -285,6 +285,7 @@ Les tests utilitaires (sans Google) :
 npm run test:parser   # heuristiques de lecture de tickets + articles
 npm run test:expenses # validation des dépenses, articles, économies et conflits
 npm run test:ticket-u  # ticket Magasin U complet : 35 articles, poids, rayons, réductions, Carte U
+npm run test:stores    # panel multi-enseignes : Carrefour, Lidl, Leclerc, restaurant, pharmacie, Amazon, carburant…
 npm run test:pdf      # extraction de texte d'un PDF
 npm run test:ocr      # OCR d'une image (télécharge le modèle au premier lancement)
 ```
